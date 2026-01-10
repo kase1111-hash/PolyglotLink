@@ -86,6 +86,7 @@ test = [
     "pytest-mock>=3.12",
     "pytest-xdist>=3.5",
     "pytest-timeout>=2.2",
+    "hypothesis>=6.92",
     "locust>=2.20",
     "httpx>=0.26",
 ]
