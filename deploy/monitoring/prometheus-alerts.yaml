@@ -1,0 +1,198 @@
+# PolyglotLink Prometheus Alerting Rules
+# Deploy to Prometheus server or use with Alertmanager
+
+groups:
+  - name: polyglotlink-availability
+    interval: 30s
+    rules:
+      - alert: PolyglotLinkDown
+        expr: up{job="polyglotlink"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PolyglotLink instance is down"
+          description: "PolyglotLink instance {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: PolyglotLinkHighErrorRate
+        expr: |
+          (
+            sum(rate(polyglotlink_messages_failed_total[5m])) /
+            sum(rate(polyglotlink_messages_received_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate in message processing"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+
+      - alert: PolyglotLinkCriticalErrorRate
+        expr: |
+          (
+            sum(rate(polyglotlink_messages_failed_total[5m])) /
+            sum(rate(polyglotlink_messages_received_total[5m]))
+          ) > 0.20
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical error rate in message processing"
+          description: "Error rate is {{ $value | humanizePercentage }} - immediate attention required."
+
+  - name: polyglotlink-performance
+    interval: 30s
+    rules:
+      - alert: PolyglotLinkHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(polyglotlink_message_processing_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High message processing latency"
+          description: "P95 latency is {{ $value | humanizeDuration }} over the last 5 minutes."
+
+      - alert: PolyglotLinkVeryHighLatency
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(polyglotlink_message_processing_seconds_bucket[5m])) by (le)
+          ) > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Very high message processing latency"
+          description: "P99 latency is {{ $value | humanizeDuration }}."
+
+      - alert: PolyglotLinkLowThroughput
+        expr: |
+          sum(rate(polyglotlink_messages_processed_total[5m])) < 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low message throughput"
+          description: "Processing only {{ $value | humanize }} messages per second."
+
+  - name: polyglotlink-resources
+    interval: 30s
+    rules:
+      - alert: PolyglotLinkHighMemory
+        expr: |
+          process_resident_memory_bytes{job="polyglotlink"} / 1024 / 1024 > 800
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanize }}MB."
+
+      - alert: PolyglotLinkHighCPU
+        expr: |
+          rate(process_cpu_seconds_total{job="polyglotlink"}[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value | humanizePercentage }}."
+
+  - name: polyglotlink-dependencies
+    interval: 30s
+    rules:
+      - alert: PolyglotLinkRedisDown
+        expr: |
+          polyglotlink_active_connections{protocol="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis connection lost"
+          description: "PolyglotLink cannot connect to Redis."
+
+      - alert: PolyglotLinkKafkaDown
+        expr: |
+          polyglotlink_active_connections{protocol="kafka"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka connection lost"
+          description: "PolyglotLink cannot connect to Kafka."
+
+      - alert: PolyglotLinkHighCacheMissRate
+        expr: |
+          (
+            sum(rate(polyglotlink_cache_misses_total[5m])) /
+            (sum(rate(polyglotlink_cache_hits_total[5m])) + sum(rate(polyglotlink_cache_misses_total[5m])))
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High cache miss rate"
+          description: "Cache miss rate is {{ $value | humanizePercentage }}."
+
+  - name: polyglotlink-llm
+    interval: 60s
+    rules:
+      - alert: PolyglotLinkLLMHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(polyglotlink_llm_request_seconds_bucket[5m])) by (le, model)
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High LLM API latency"
+          description: "LLM API P95 latency for {{ $labels.model }} is {{ $value | humanizeDuration }}."
+
+      - alert: PolyglotLinkLLMHighErrorRate
+        expr: |
+          (
+            sum(rate(polyglotlink_llm_requests_total{status="error"}[5m])) by (model) /
+            sum(rate(polyglotlink_llm_requests_total[5m])) by (model)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High LLM API error rate"
+          description: "LLM API error rate for {{ $labels.model }} is {{ $value | humanizePercentage }}."
+
+      - alert: PolyglotLinkHighTokenUsage
+        expr: |
+          sum(increase(polyglotlink_llm_tokens_total[1h])) > 100000
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: "High LLM token usage"
+          description: "Used {{ $value | humanize }} tokens in the last hour."
+
+  - name: polyglotlink-queue
+    interval: 30s
+    rules:
+      - alert: PolyglotLinkQueueBacklog
+        expr: |
+          polyglotlink_queue_size{queue_name="ingest"} > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Message queue backlog growing"
+          description: "Queue {{ $labels.queue_name }} has {{ $value | humanize }} pending messages."
+
+      - alert: PolyglotLinkQueueCriticalBacklog
+        expr: |
+          polyglotlink_queue_size{queue_name="ingest"} > 50000
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical message queue backlog"
+          description: "Queue {{ $labels.queue_name }} has {{ $value | humanize }} pending messages."

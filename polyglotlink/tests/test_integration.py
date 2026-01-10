@@ -65,6 +65,7 @@ class TestEndToEndPipeline:
             topic="sensors/env-sensor-001/telemetry",
             payload_raw=payload,
             payload_encoding=detect_encoding(payload),
+            timestamp=datetime.utcnow(),
         )
 
         # Step 2: Extract schema
@@ -128,6 +129,7 @@ class TestEndToEndPipeline:
             topic="/api/meters/power-meter-001/readings",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         schema = schema_extractor.extract_schema(raw)
@@ -166,6 +168,7 @@ class TestEndToEndPipeline:
             topic="trackers/tracker-001/location",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         schema = schema_extractor.extract_schema(raw)
@@ -217,6 +220,7 @@ class TestEndToEndPipeline:
             topic="sensors/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         schema = schema_extractor.extract_schema(raw)
@@ -251,8 +255,8 @@ class TestProtocolListenerIntegration:
         # Pattern: sensors/{id}
         assert extract_device_id("sensors/temp-001") == "temp-001"
 
-        # Pattern: {id}/data
-        assert extract_device_id("meter-001/data") == "data"
+        # Pattern: {id}/data - extracts the ID before /data
+        assert extract_device_id("meter-001/data") == "meter-001"
 
         # Fallback: last segment
         assert extract_device_id("some/random/path/device123") == "device123"
@@ -277,6 +281,7 @@ class TestSchemaExtractorIntegration:
             topic="test",
             payload_raw=b"{}",
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         schema = extractor.extract_schema(raw)
@@ -295,6 +300,7 @@ class TestSchemaExtractorIntegration:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         schema = extractor.extract_schema(raw)
@@ -314,6 +320,7 @@ class TestSchemaExtractorIntegration:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         schema = extractor.extract_schema(raw)
@@ -333,6 +340,7 @@ class TestSchemaExtractorIntegration:
             topic="test",
             payload_raw=payload1,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         raw2 = RawMessage(
@@ -342,6 +350,7 @@ class TestSchemaExtractorIntegration:
             topic="test",
             payload_raw=payload2,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         schema1 = extractor.extract_schema(raw1)
@@ -387,6 +396,7 @@ class TestNormalizationIntegration:
             topic="sensors/thermo-001/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         schema = extractor.extract_schema(raw)
@@ -421,6 +431,7 @@ class TestNormalizationIntegration:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         schema = extractor.extract_schema(raw)
@@ -467,6 +478,7 @@ class TestValidationIntegration:
             topic="sensors/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         schema = extractor.extract_schema(raw)
@@ -497,6 +509,7 @@ class TestValidationIntegration:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         schema = extractor.extract_schema(raw)

@@ -32,18 +32,18 @@ Testing & Validation
 - [x] Perform exploit testing (SQLi, XSS, overflow)
 - [x] Check for backdoors & unauthorized access
 - [x] Run static analysis (lint, type check, vuln scan)
-- [ ] Run dynamic analysis (fuzzing, runtime behavior)
+- [x] Run dynamic analysis (fuzzing, runtime behavior)
 
 Build, Deployment & Monitoring
 - [x] Create automated build scripts (Makefile, .bat, shell)
 - [x] Set up CI/CD pipeline (GitHub Actions, Jenkins, etc.)
 - [x] Configure environment-specific settings (dev/stage/prod)
 - [x] Build distributable packages (Dockerfile, zip, exe)
-- [ ] Create installer or assembly file (.bat, setup wizard)
+- [x] Create installer or assembly file (.bat, setup wizard)
 - [x] Implement semantic versioning (v1.0.0)
 - [x] Automate deployment process
 - [x] Add telemetry & metrics collection
-- [ ] Monitor uptime, errors, and performance
+- [x] Monitor uptime, errors, and performance
 - [x] Add rollback & recovery mechanisms
 
 Finalization & Compliance
@@ -52,7 +52,7 @@ Finalization & Compliance
 - [ ] Run penetration test (internal or 3rd-party)
 - [x] Document APIs (Swagger / Postman)
 - [x] Create architecture & data flow diagrams
-- [ ] Finalize user documentation (README, FAQ, troubleshooting)
+- [x] Finalize user documentation (README, FAQ, troubleshooting)
 - [x] Add license file
 - [x] Write changelog
 - [ ] Perform compliance review (GDPR, HIPAA, etc.)

@@ -62,6 +62,7 @@ from polyglotlink.utils.logging import (
 )
 from polyglotlink.utils.validation import (
     detect_malicious_patterns,
+    is_valid_topic,
     sanitize_dict_keys,
     sanitize_identifier,
     sanitize_string,
@@ -69,6 +70,7 @@ from polyglotlink.utils.validation import (
     validate_confidence,
     validate_field_type,
     validate_json_depth,
+    validate_json_payload,
     validate_json_size,
     validate_number,
     validate_payload_size,
@@ -133,6 +135,7 @@ __all__ = [
     "log_performance",
     # Validation
     "detect_malicious_patterns",
+    "is_valid_topic",
     "sanitize_dict_keys",
     "sanitize_identifier",
     "sanitize_string",
@@ -140,6 +143,7 @@ __all__ = [
     "validate_confidence",
     "validate_field_type",
     "validate_json_depth",
+    "validate_json_payload",
     "validate_json_size",
     "validate_number",
     "validate_payload_size",
