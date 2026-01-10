@@ -1,0 +1,674 @@
+openapi: 3.1.0
+info:
+  title: PolyglotLink API
+  description: |
+    Semantic API Translator for IoT Device Ecosystems.
+
+    PolyglotLink provides a unified semantic layer for IoT device communication,
+    automatically translating heterogeneous device protocols and data formats
+    into a normalized, semantically-enriched message format.
+
+    ## Features
+    - Multi-protocol message ingestion (MQTT, CoAP, HTTP, WebSocket)
+    - Automatic schema detection and extraction
+    - Semantic translation to canonical concepts
+    - Unit conversion and normalization
+    - Multi-destination output publishing
+
+    ## Authentication
+    API endpoints can be protected with API key authentication.
+    Pass the API key in the `X-API-Key` header.
+
+  version: 0.1.0
+  contact:
+    name: PolyglotLink Team
+    url: https://github.com/polyglotlink/polyglotlink
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.polyglotlink.io
+    description: Production server
+
+tags:
+  - name: Ingest
+    description: Message ingestion endpoints
+  - name: Health
+    description: Health and status endpoints
+  - name: Metrics
+    description: Prometheus metrics endpoints
+  - name: Ontology
+    description: Ontology management endpoints
+  - name: Devices
+    description: Device registry endpoints
+
+paths:
+  /ingest/mqtt:
+    post:
+      summary: Ingest MQTT-style message
+      description: |
+        Ingest a message as if it came from an MQTT broker.
+        Useful for HTTP-to-MQTT bridging or testing.
+      tags:
+        - Ingest
+      operationId: ingestMqtt
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MqttIngestRequest'
+            examples:
+              environmental_sensor:
+                summary: Environmental sensor data
+                value:
+                  topic: sensors/env-001/telemetry
+                  payload:
+                    temperature: 23.5
+                    humidity: 65
+                    pressure_hpa: 1013.25
+                    device_id: env-001
+                    timestamp: "2024-01-15T10:30:00Z"
+              power_meter:
+                summary: Power meter reading
+                value:
+                  topic: meters/power-001/data
+                  payload:
+                    voltage: 230.5
+                    current: 2.3
+                    power_w: 530.15
+                    device_id: power-001
+      responses:
+        '202':
+          description: Message accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /ingest/http:
+    post:
+      summary: Ingest HTTP webhook message
+      description: |
+        Ingest a message from an HTTP webhook.
+        The payload is processed through the full normalization pipeline.
+      tags:
+        - Ingest
+      operationId: ingestHttp
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: X-Device-ID
+          in: header
+          description: Device identifier
+          required: false
+          schema:
+            type: string
+        - name: X-Device-Type
+          in: header
+          description: Device type hint
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+            examples:
+              generic_sensor:
+                summary: Generic sensor payload
+                value:
+                  sensor_id: temp-001
+                  readings:
+                    temp_c: 22.5
+                    humidity_pct: 55
+                  ts: 1705312200
+      responses:
+        '202':
+          description: Message accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /ingest/batch:
+    post:
+      summary: Ingest batch of messages
+      description: |
+        Ingest multiple messages in a single request.
+        All messages are processed asynchronously.
+      tags:
+        - Ingest
+      operationId: ingestBatch
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+              maxItems: 1000
+            examples:
+              sensor_batch:
+                summary: Batch of sensor readings
+                value:
+                  - device_id: sensor-001
+                    temperature: 23.5
+                    timestamp: "2024-01-15T10:30:00Z"
+                  - device_id: sensor-002
+                    temperature: 24.0
+                    timestamp: "2024-01-15T10:30:01Z"
+      responses:
+        '202':
+          description: Batch accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchIngestResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          description: Batch too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /health:
+    get:
+      summary: Health check
+      description: Returns the health status of the service and its dependencies.
+      tags:
+        - Health
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                healthy:
+                  value:
+                    status: healthy
+                    version: 0.1.0
+                    uptime_seconds: 3600
+                    checks:
+                      redis: ok
+                      timescaledb: ok
+                      kafka: ok
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /health/live:
+    get:
+      summary: Liveness probe
+      description: Simple liveness check for Kubernetes.
+      tags:
+        - Health
+      operationId: livenessProbe
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
+
+  /health/ready:
+    get:
+      summary: Readiness probe
+      description: Readiness check for Kubernetes. Returns 200 when ready to accept traffic.
+      tags:
+        - Health
+      operationId: readinessProbe
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
+        '503':
+          description: Service is not ready
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      description: Returns metrics in Prometheus text format.
+      tags:
+        - Metrics
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                # HELP polyglotlink_messages_processed_total Total messages processed
+                # TYPE polyglotlink_messages_processed_total counter
+                polyglotlink_messages_processed_total{protocol="MQTT"} 12345
+
+  /api/v1/ontology/concepts:
+    get:
+      summary: List ontology concepts
+      description: Returns all canonical concepts in the ontology.
+      tags:
+        - Ontology
+      operationId: listConcepts
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: category
+          in: query
+          description: Filter by category
+          schema:
+            type: string
+            enum: [temperature, humidity, pressure, power, location, identifier]
+        - name: limit
+          in: query
+          description: Maximum number of results
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+      responses:
+        '200':
+          description: List of concepts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Concept'
+
+    post:
+      summary: Add custom concept
+      description: Add a new custom concept to the ontology.
+      tags:
+        - Ontology
+      operationId: addConcept
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConceptCreate'
+      responses:
+        '201':
+          description: Concept created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Concept'
+        '409':
+          description: Concept already exists
+
+  /api/v1/devices:
+    get:
+      summary: List known devices
+      description: Returns all devices that have sent messages.
+      tags:
+        - Devices
+      operationId: listDevices
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: protocol
+          in: query
+          description: Filter by protocol
+          schema:
+            type: string
+            enum: [MQTT, COAP, MODBUS, OPCUA, HTTP, WEBSOCKET]
+        - name: active
+          in: query
+          description: Only return recently active devices
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: List of devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Device'
+
+  /api/v1/devices/{deviceId}:
+    get:
+      summary: Get device details
+      description: Returns details about a specific device.
+      tags:
+        - Devices
+      operationId: getDevice
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Device details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceDetails'
+        '404':
+          description: Device not found
+
+  /api/v1/devices/{deviceId}/schema:
+    get:
+      summary: Get device schema
+      description: Returns the extracted schema for a device.
+      tags:
+        - Devices
+      operationId: getDeviceSchema
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Device schema
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtractedSchema'
+        '404':
+          description: Device or schema not found
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+
+  schemas:
+    MqttIngestRequest:
+      type: object
+      required:
+        - payload
+      properties:
+        topic:
+          type: string
+          description: MQTT topic path
+          example: sensors/device-001/telemetry
+        payload:
+          type: object
+          additionalProperties: true
+          description: Message payload
+        qos:
+          type: integer
+          enum: [0, 1, 2]
+          default: 1
+          description: MQTT QoS level
+        retain:
+          type: boolean
+          default: false
+          description: MQTT retain flag
+
+    IngestResponse:
+      type: object
+      properties:
+        message_id:
+          type: string
+          format: uuid
+          description: Assigned message ID
+        status:
+          type: string
+          enum: [accepted, processing, completed]
+        received_at:
+          type: string
+          format: date-time
+
+    BatchIngestResponse:
+      type: object
+      properties:
+        accepted:
+          type: integer
+          description: Number of messages accepted
+        rejected:
+          type: integer
+          description: Number of messages rejected
+        message_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        version:
+          type: string
+        uptime_seconds:
+          type: number
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [ok, error, timeout]
+
+    Concept:
+      type: object
+      properties:
+        name:
+          type: string
+          example: temperature_celsius
+        category:
+          type: string
+          example: temperature
+        canonical_unit:
+          type: string
+          example: celsius
+        description:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: string
+        valid_range:
+          type: object
+          properties:
+            min:
+              type: number
+            max:
+              type: number
+
+    ConceptCreate:
+      type: object
+      required:
+        - name
+        - category
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        canonical_unit:
+          type: string
+        description:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: string
+
+    Device:
+      type: object
+      properties:
+        device_id:
+          type: string
+        protocol:
+          type: string
+        first_seen:
+          type: string
+          format: date-time
+        last_seen:
+          type: string
+          format: date-time
+        message_count:
+          type: integer
+
+    DeviceDetails:
+      allOf:
+        - $ref: '#/components/schemas/Device'
+        - type: object
+          properties:
+            schema_signature:
+              type: string
+            field_count:
+              type: integer
+            topics:
+              type: array
+              items:
+                type: string
+
+    ExtractedSchema:
+      type: object
+      properties:
+        message_id:
+          type: string
+        device_id:
+          type: string
+        protocol:
+          type: string
+        schema_signature:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtractedField'
+        extracted_at:
+          type: string
+          format: date-time
+
+    ExtractedField:
+      type: object
+      properties:
+        key:
+          type: string
+        original_key:
+          type: string
+        value_type:
+          type: string
+          enum: [string, integer, float, boolean, datetime, numeric_string]
+        inferred_unit:
+          type: string
+        inferred_semantic:
+          type: string
+        is_timestamp:
+          type: boolean
+        is_identifier:
+          type: boolean
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+        request_id:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: validation_error
+            message: Invalid payload format
+            details:
+              field: temperature
+              issue: must be a number
+
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: unauthorized
+            message: Invalid or missing API key
+
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until rate limit resets
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: rate_limited
+            message: Rate limit exceeded
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: internal_error
+            message: An unexpected error occurred
+            request_id: abc123
