@@ -1,0 +1,97 @@
+# PolyglotLink Development Environment Configuration
+# This file contains settings optimized for local development
+
+environment: development
+
+# Logging configuration
+logging:
+  level: DEBUG
+  format: console  # Human-readable console output
+  include_timestamps: true
+  colorize: true
+
+# LLM/AI settings
+llm:
+  model: gpt-4o-mini  # Use smaller model for development
+  temperature: 0.1
+  max_tokens: 2000
+  max_retries: 2
+  embedding_model: text-embedding-3-small
+  embedding_threshold: 0.75
+  cache_embeddings: true
+
+# Protocol listeners
+mqtt:
+  enabled: true
+  broker_host: localhost
+  broker_port: 1883
+  topic_patterns:
+    - "sensors/#"
+    - "devices/+/telemetry"
+    - "test/#"
+  qos: 1
+  tls_enabled: false
+
+http:
+  enabled: true
+  host: "127.0.0.1"
+  port: 8080
+  path_prefix: /ingest
+  cors_enabled: true
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://127.0.0.1:3000"
+  rate_limit: 1000  # requests per minute
+
+# Data storage
+redis:
+  host: localhost
+  port: 6379
+  db: 0
+  password: ""
+  ssl: false
+
+timescaledb:
+  host: localhost
+  port: 5432
+  database: polyglotlink_dev
+  user: postgres
+  password: postgres
+  pool_size: 5
+
+neo4j:
+  uri: bolt://localhost:7687
+  user: neo4j
+  password: neo4j
+  database: neo4j
+
+weaviate:
+  host: localhost
+  port: 8081
+  grpc_port: 50051
+
+# Message output
+kafka:
+  enabled: false  # Disabled by default in development
+  bootstrap_servers:
+    - localhost:9092
+  topic_prefix: dev_
+
+# Metrics and monitoring
+metrics:
+  enabled: true
+  port: 9090
+  path: /metrics
+
+# Error tracking (disabled in development)
+sentry:
+  enabled: false
+  dsn: ""
+  traces_sample_rate: 0.0
+
+# Development-specific settings
+dev:
+  hot_reload: true
+  debug_mode: true
+  mock_external_services: true
+  log_all_messages: true
