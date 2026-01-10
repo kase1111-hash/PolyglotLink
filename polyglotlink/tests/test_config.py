@@ -35,25 +35,29 @@ class TestLLMSettings:
         assert settings.temperature == 2.0
 
         # Invalid temperature
-        with pytest.raises(ValueError):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
             LLMSettings(temperature=-0.1)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError):
             LLMSettings(temperature=2.1)
 
     def test_max_tokens_bounds(self):
         settings = LLMSettings(max_tokens=100)
         assert settings.max_tokens == 100
 
-        with pytest.raises(ValueError):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
             LLMSettings(max_tokens=50)  # Below minimum
 
     def test_embedding_threshold_bounds(self):
-        settings = LLMSettings(embedding_threshold=0.5)
+        # Use validation_alias for constructor
+        settings = LLMSettings(EMBEDDING_THRESHOLD=0.5)
         assert settings.embedding_threshold == 0.5
 
-        with pytest.raises(ValueError):
-            LLMSettings(embedding_threshold=1.5)
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            LLMSettings(EMBEDDING_THRESHOLD=1.5)
 
 
 class TestMQTTListenerSettings:
@@ -70,10 +74,11 @@ class TestMQTTListenerSettings:
         settings = MQTTListenerSettings(broker_port=8883)
         assert settings.broker_port == 8883
 
-        with pytest.raises(ValueError):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
             MQTTListenerSettings(broker_port=0)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError):
             MQTTListenerSettings(broker_port=70000)
 
     def test_qos_bounds(self):
@@ -83,7 +88,8 @@ class TestMQTTListenerSettings:
         settings = MQTTListenerSettings(qos=2)
         assert settings.qos == 2
 
-        with pytest.raises(ValueError):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
             MQTTListenerSettings(qos=3)
 
     def test_topic_patterns_string_parsing(self):
@@ -96,7 +102,8 @@ class TestMQTTListenerSettings:
 
     def test_tls_validation(self):
         # TLS enabled without cert should fail
-        with pytest.raises(ValueError):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
             MQTTListenerSettings(tls_enabled=True, ca_cert=None)
 
         # TLS enabled with cert should work
@@ -132,31 +139,36 @@ class TestSettings:
         assert settings.env in ["development", "staging", "production", "test"]
 
     def test_log_level_validation(self):
-        settings = Settings(log_level="DEBUG")
+        # Use validation_alias name for constructor
+        settings = Settings(LOG_LEVEL="DEBUG")
         assert settings.log_level == "DEBUG"
 
-        settings = Settings(log_level="info")
+        settings = Settings(LOG_LEVEL="info")
         assert settings.log_level == "INFO"
 
-        with pytest.raises(ValueError):
-            Settings(log_level="INVALID")
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            Settings(LOG_LEVEL="INVALID")
 
     def test_environment_validation(self):
-        settings = Settings(env="production")
+        # Use validation_alias name for constructor
+        settings = Settings(POLYGLOTLINK_ENV="production")
         assert settings.env == "production"
 
-        settings = Settings(env="DEVELOPMENT")
+        settings = Settings(POLYGLOTLINK_ENV="DEVELOPMENT")
         assert settings.env == "development"
 
-        with pytest.raises(ValueError):
-            Settings(env="invalid_env")
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            Settings(POLYGLOTLINK_ENV="invalid_env")
 
     def test_is_production_property(self):
-        settings = Settings(env="production")
+        # Use validation_alias name for constructor
+        settings = Settings(POLYGLOTLINK_ENV="production")
         assert settings.is_production is True
         assert settings.is_development is False
 
-        settings = Settings(env="development")
+        settings = Settings(POLYGLOTLINK_ENV="development")
         assert settings.is_production is False
         assert settings.is_development is True
 

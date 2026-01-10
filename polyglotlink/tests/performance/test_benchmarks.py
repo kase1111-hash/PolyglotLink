@@ -50,6 +50,7 @@ class TestSchemaExtractorBenchmarks:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         # Warm-up
@@ -107,6 +108,7 @@ class TestSchemaExtractorBenchmarks:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         # Benchmark
@@ -142,6 +144,7 @@ class TestSchemaExtractorBenchmarks:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         # Benchmark
@@ -287,6 +290,7 @@ class TestNormalizationBenchmarks:
             topic="sensors/sensor-001/telemetry",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         extractor = components["extractor"]
@@ -344,6 +348,7 @@ class TestMemoryEfficiency:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.utcnow(),
         )
 
         # Measure initial memory
@@ -387,6 +392,7 @@ class TestConcurrencyBenchmarks:
                 topic="test",
                 payload_raw=payloads[idx % len(payloads)],
                 payload_encoding=PayloadEncoding.JSON,
+                timestamp=datetime.utcnow(),
             )
             return extractor.extract_schema(raw)
 

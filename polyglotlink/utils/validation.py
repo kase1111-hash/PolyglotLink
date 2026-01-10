@@ -359,8 +359,8 @@ def validate_number(
             constraint={"max": max_value}
         )
 
-    # Return as int if it's a whole number
-    if num == int(num) and not math.isinf(num):
+    # Return as int if it's a whole number (but not NaN or Inf)
+    if not math.isnan(num) and not math.isinf(num) and num == int(num):
         return int(num)
 
     return num
@@ -477,3 +477,72 @@ def validate_protocol(protocol: str) -> bool:
 def validate_confidence(value: float, field: str = "confidence") -> float:
     """Validate confidence score is between 0 and 1."""
     return validate_number(value, field, min_value=0.0, max_value=1.0)
+
+
+def validate_json_payload(
+    payload: bytes,
+    max_size: int = 10 * 1024 * 1024,
+    max_depth: int = 50,
+) -> tuple:
+    """
+    Validate a JSON payload.
+
+    Args:
+        payload: Raw bytes payload
+        max_size: Maximum payload size in bytes
+        max_depth: Maximum nesting depth
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    import json
+
+    # Check size
+    if len(payload) > max_size:
+        return False, f"Payload size ({len(payload)}) exceeds maximum ({max_size})"
+
+    # Try to parse JSON
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError as e:
+        return False, f"Invalid JSON: {e}"
+
+    # Check depth
+    try:
+        validate_json_depth(data, max_depth=max_depth)
+    except ValidationError as e:
+        return False, f"JSON depth exceeded: {str(e)}"
+
+    return True, None
+
+
+def is_valid_topic(topic: str) -> bool:
+    """
+    Check if an MQTT topic is valid.
+
+    Args:
+        topic: Topic string to validate
+
+    Returns:
+        True if valid, False otherwise
+    """
+    if not topic:
+        return False
+
+    # Check for path traversal
+    if ".." in topic:
+        return False
+
+    # Check for dangerous patterns
+    if "<" in topic or ">" in topic:
+        return False
+
+    # Check for null bytes
+    if "\x00" in topic:
+        return False
+
+    # Basic format check - alphanumeric, slashes, wildcards, dots, dashes, underscores
+    if not re.match(r'^[a-zA-Z0-9/+#._\-]+$', topic):
+        return False
+
+    return True
