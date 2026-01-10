@@ -12,7 +12,7 @@ Foundation & Planning
 
 Core Implementation
 - [x] Implement core logic per spec
-- [ ] Refactor for reusable components (DRY)
+- [x] Refactor for reusable components (DRY)
 - [x] Add input validation & sanitation
 - [x] Implement error handling
 - [x] Add general logging
@@ -23,7 +23,7 @@ Core Implementation
 - [x] Add accessibility & localization support (CLI application)
 
 Testing & Validation
-- [ ] Write unit tests
+- [x] Write unit tests
 - [ ] Write integration tests
 - [ ] Write system/acceptance tests
 - [ ] Add regression test suite
