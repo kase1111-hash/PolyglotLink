@@ -74,6 +74,11 @@ from polyglotlink.utils.validation import (
     validate_payload_size,
     validate_protocol,
 )
+from polyglotlink.utils.metrics import (
+    PolyglotLinkMetrics,
+    get_metrics,
+    metrics,
+)
 
 __all__ = [
     # Config
@@ -139,4 +144,8 @@ __all__ = [
     "validate_number",
     "validate_payload_size",
     "validate_protocol",
+    # Metrics
+    "PolyglotLinkMetrics",
+    "get_metrics",
+    "metrics",
 ]
