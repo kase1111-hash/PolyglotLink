@@ -1,13 +1,30 @@
 """
 PolyglotLink Utilities
 
-Common utilities for configuration, logging, validation, and error handling.
+Common utilities for configuration, logging, validation, error handling,
+secrets management, and error tracking.
 """
 
 from polyglotlink.utils.config import (
     Settings,
     get_settings,
     reload_settings,
+)
+from polyglotlink.utils.error_logging import (
+    add_breadcrumb,
+    capture_errors,
+    capture_exception,
+    capture_message,
+    error_context,
+    flush as flush_errors,
+    init_sentry,
+    set_user,
+)
+from polyglotlink.utils.secrets import (
+    SecretsManager,
+    get_secret,
+    get_secrets_manager,
+    require_secret,
 )
 from polyglotlink.utils.exceptions import (
     CacheError,
@@ -63,6 +80,20 @@ __all__ = [
     "Settings",
     "get_settings",
     "reload_settings",
+    # Error Logging
+    "add_breadcrumb",
+    "capture_errors",
+    "capture_exception",
+    "capture_message",
+    "error_context",
+    "flush_errors",
+    "init_sentry",
+    "set_user",
+    # Secrets
+    "SecretsManager",
+    "get_secret",
+    "get_secrets_manager",
+    "require_secret",
     # Exceptions
     "CacheError",
     "ConceptExistsError",
