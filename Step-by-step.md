@@ -39,7 +39,7 @@ Build, Deployment & Monitoring
 - [x] Set up CI/CD pipeline (GitHub Actions, Jenkins, etc.)
 - [x] Configure environment-specific settings (dev/stage/prod)
 - [x] Build distributable packages (Dockerfile, zip, exe)
-- [ ] Create installer or assembly file (.bat, setup wizard)
+- [x] Create installer or assembly file (.bat, setup wizard)
 - [x] Implement semantic versioning (v1.0.0)
 - [x] Automate deployment process
 - [x] Add telemetry & metrics collection
