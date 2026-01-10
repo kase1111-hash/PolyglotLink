@@ -1,0 +1,111 @@
+# PolyglotLink Staging Environment Configuration
+# This file contains settings for staging/QA environment
+
+environment: staging
+
+# Logging configuration
+logging:
+  level: INFO
+  format: json  # Structured JSON for log aggregation
+  include_timestamps: true
+  colorize: false
+
+# LLM/AI settings
+llm:
+  model: gpt-4o
+  temperature: 0.1
+  max_tokens: 2000
+  max_retries: 3
+  embedding_model: text-embedding-3-small
+  embedding_threshold: 0.80
+  cache_embeddings: true
+
+# Protocol listeners
+mqtt:
+  enabled: true
+  broker_host: ${MQTT_BROKER_HOST:-mqtt-staging.internal}
+  broker_port: ${MQTT_BROKER_PORT:-8883}
+  topic_patterns:
+    - "sensors/#"
+    - "devices/+/telemetry"
+  qos: 1
+  tls_enabled: true
+  ca_cert: /etc/ssl/certs/mqtt-ca.pem
+
+http:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8080
+  path_prefix: /ingest
+  cors_enabled: true
+  cors_origins:
+    - "https://staging.example.com"
+  rate_limit: 5000  # requests per minute
+
+# Data storage
+redis:
+  host: ${REDIS_HOST:-redis-staging.internal}
+  port: ${REDIS_PORT:-6379}
+  db: 0
+  password: ${REDIS_PASSWORD}
+  ssl: true
+
+timescaledb:
+  host: ${TIMESCALE_HOST:-timescale-staging.internal}
+  port: ${TIMESCALE_PORT:-5432}
+  database: polyglotlink_staging
+  user: ${TIMESCALE_USER:-polyglotlink}
+  password: ${TIMESCALE_PASSWORD}
+  pool_size: 10
+  ssl_mode: require
+
+neo4j:
+  uri: ${NEO4J_URI:-bolt://neo4j-staging.internal:7687}
+  user: ${NEO4J_USER:-neo4j}
+  password: ${NEO4J_PASSWORD}
+  database: polyglotlink
+
+weaviate:
+  host: ${WEAVIATE_HOST:-weaviate-staging.internal}
+  port: 8080
+  grpc_port: 50051
+  api_key: ${WEAVIATE_API_KEY}
+
+# Message output
+kafka:
+  enabled: true
+  bootstrap_servers:
+    - ${KAFKA_BROKER_1:-kafka-staging-1.internal:9092}
+    - ${KAFKA_BROKER_2:-kafka-staging-2.internal:9092}
+  topic_prefix: staging_
+  security_protocol: SASL_SSL
+  sasl_mechanism: PLAIN
+  sasl_username: ${KAFKA_USERNAME}
+  sasl_password: ${KAFKA_PASSWORD}
+
+# Metrics and monitoring
+metrics:
+  enabled: true
+  port: 9090
+  path: /metrics
+
+# Error tracking
+sentry:
+  enabled: true
+  dsn: ${SENTRY_DSN}
+  environment: staging
+  traces_sample_rate: 0.5
+  profiles_sample_rate: 0.1
+
+# Health checks
+health:
+  enabled: true
+  port: 8081
+  path: /health
+  detailed: true
+
+# Staging-specific settings
+staging:
+  debug_mode: false
+  log_all_messages: false
+  enable_profiling: true

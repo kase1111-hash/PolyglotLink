@@ -1,0 +1,154 @@
+# PolyglotLink Production Environment Configuration
+# This file contains settings optimized for production deployment
+# SECURITY: All sensitive values should come from environment variables or secrets manager
+
+environment: production
+
+# Logging configuration
+logging:
+  level: WARNING
+  format: json
+  include_timestamps: true
+  colorize: false
+  # Log sensitive data censoring enabled by default in production
+
+# LLM/AI settings
+llm:
+  model: gpt-4o
+  temperature: 0.1
+  max_tokens: 2000
+  max_retries: 5
+  embedding_model: text-embedding-3-small
+  embedding_threshold: 0.85  # Higher threshold for production accuracy
+  cache_embeddings: true
+  cache_ttl: 86400  # 24 hours
+
+# Protocol listeners
+mqtt:
+  enabled: true
+  broker_host: ${MQTT_BROKER_HOST}
+  broker_port: ${MQTT_BROKER_PORT:-8883}
+  topic_patterns:
+    - "sensors/#"
+    - "devices/+/telemetry"
+  qos: 2  # Exactly once delivery for production
+  tls_enabled: true
+  ca_cert: ${MQTT_CA_CERT_PATH}
+  client_cert: ${MQTT_CLIENT_CERT_PATH}
+  client_key: ${MQTT_CLIENT_KEY_PATH}
+
+http:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8080
+  path_prefix: /ingest
+  cors_enabled: true
+  cors_origins:
+    - ${ALLOWED_ORIGIN}
+  rate_limit: 10000
+  request_timeout: 30
+  max_request_size: 1048576  # 1MB
+
+# Data storage
+redis:
+  host: ${REDIS_HOST}
+  port: ${REDIS_PORT:-6379}
+  db: 0
+  password: ${REDIS_PASSWORD}
+  ssl: true
+  cluster_mode: ${REDIS_CLUSTER_MODE:-false}
+  sentinel_master: ${REDIS_SENTINEL_MASTER:-}
+
+timescaledb:
+  host: ${TIMESCALE_HOST}
+  port: ${TIMESCALE_PORT:-5432}
+  database: ${TIMESCALE_DATABASE:-polyglotlink}
+  user: ${TIMESCALE_USER}
+  password: ${TIMESCALE_PASSWORD}
+  pool_size: 20
+  max_overflow: 10
+  ssl_mode: verify-full
+  ssl_ca: ${TIMESCALE_SSL_CA_PATH}
+
+neo4j:
+  uri: ${NEO4J_URI}
+  user: ${NEO4J_USER}
+  password: ${NEO4J_PASSWORD}
+  database: polyglotlink
+  encrypted: true
+
+weaviate:
+  host: ${WEAVIATE_HOST}
+  port: 8080
+  grpc_port: 50051
+  api_key: ${WEAVIATE_API_KEY}
+
+# Message output
+kafka:
+  enabled: true
+  bootstrap_servers: ${KAFKA_BOOTSTRAP_SERVERS}
+  topic_prefix: prod_
+  security_protocol: SASL_SSL
+  sasl_mechanism: SCRAM-SHA-512
+  sasl_username: ${KAFKA_USERNAME}
+  sasl_password: ${KAFKA_PASSWORD}
+  acks: all  # Wait for all replicas
+  retries: 10
+  compression_type: lz4
+
+# Metrics and monitoring
+metrics:
+  enabled: true
+  port: 9090
+  path: /metrics
+  histogram_buckets:
+    - 0.005
+    - 0.01
+    - 0.025
+    - 0.05
+    - 0.1
+    - 0.25
+    - 0.5
+    - 1.0
+    - 2.5
+    - 5.0
+    - 10.0
+
+# Error tracking
+sentry:
+  enabled: true
+  dsn: ${SENTRY_DSN}
+  environment: production
+  traces_sample_rate: 0.1
+  profiles_sample_rate: 0.01
+  release: ${APP_VERSION}
+  server_name: ${HOSTNAME}
+
+# Health checks
+health:
+  enabled: true
+  port: 8081
+  path: /health
+  detailed: false  # Don't expose internal details in production
+
+# Production-specific settings
+production:
+  debug_mode: false
+  log_all_messages: false
+  enable_profiling: false
+  graceful_shutdown_timeout: 30
+
+# Security settings
+security:
+  api_key_required: true
+  api_key_header: X-API-Key
+  jwt_enabled: ${JWT_ENABLED:-false}
+  jwt_secret: ${JWT_SECRET}
+  jwt_algorithm: HS256
+  rate_limit_by_key: true
+
+# High availability settings
+ha:
+  leader_election: ${HA_LEADER_ELECTION:-false}
+  instance_id: ${INSTANCE_ID:-${HOSTNAME}}
+  heartbeat_interval: 5
