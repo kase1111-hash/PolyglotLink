@@ -1,0 +1,154 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "polyglotlink"
+version = "0.1.0"
+description = "Semantic API Translator for IoT Device Ecosystems"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "PolyglotLink Team"}
+]
+keywords = ["iot", "mqtt", "semantic", "translator", "api", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Scientific/Engineering :: Interface Engine/Protocol Translator",
+]
+
+dependencies = [
+    # Core
+    "fastapi>=0.109",
+    "uvicorn>=0.27",
+    "pydantic>=2.5",
+    "pydantic-settings>=2.0",
+
+    # Protocols
+    "paho-mqtt>=1.6",
+    "aiocoap>=0.4",
+    "pymodbus>=3.5",
+    "asyncua>=1.0",
+    "websockets>=12.0",
+
+    # Data Formats
+    "cbor2>=5.5",
+    "xmltodict>=0.13",
+
+    # LLM/Embeddings
+    "openai>=1.0",
+    "tiktoken>=0.5",
+
+    # Storage
+    "redis>=5.0",
+    "neo4j>=5.0",
+    "weaviate-client>=4.0",
+    "asyncpg>=0.29",
+    "sqlalchemy>=2.0",
+
+    # Messaging
+    "kafka-python>=2.0",
+    "aiokafka>=0.10",
+
+    # Utilities
+    "structlog>=24.1",
+    "prometheus-client>=0.19",
+    "httpx>=0.26",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.1",
+    "pytest-mock>=3.12",
+    "locust>=2.20",
+    "mypy>=1.8",
+    "ruff>=0.1",
+    "black>=24.1",
+    "pre-commit>=3.6",
+]
+
+[project.scripts]
+polyglotlink = "polyglotlink.app.main:main"
+
+[project.urls]
+Homepage = "https://github.com/polyglotlink/polyglotlink"
+Documentation = "https://github.com/polyglotlink/polyglotlink#readme"
+Repository = "https://github.com/polyglotlink/polyglotlink.git"
+Issues = "https://github.com/polyglotlink/polyglotlink/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["polyglotlink*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["polyglotlink/tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "paho.*",
+    "aiocoap.*",
+    "pymodbus.*",
+    "asyncua.*",
+    "cbor2.*",
+    "kafka.*",
+    "weaviate.*",
+    "neo4j.*",
+]
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "ARG", # flake8-unused-arguments
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+    "B904",  # raise without from inside except
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["polyglotlink"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+include = '\.pyi?$'
