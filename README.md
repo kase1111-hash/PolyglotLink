@@ -2635,4 +2635,76 @@ locust>=2.20
 
 ---
 
+## 10. Implementation Guide
+
+### Step-by-Step Setup Checklist
+
+Follow these steps to implement PolyglotLink from scratch:
+
+#### Phase 1: Project Foundation
+- [x] Create directory structure as per Section 5
+- [x] Create `requirements.txt` with all dependencies
+- [x] Create base Pydantic models (`models/schemas.py`)
+- [ ] Create configuration loader (`app/config.py`)
+- [ ] Create master configuration file (`config.yaml`)
+
+#### Phase 2: Core Data Models
+- [ ] Implement `RawMessage` model
+- [ ] Implement `ExtractedSchema` and `ExtractedField` models
+- [ ] Implement `SemanticMapping` model
+- [ ] Implement `NormalizedMessage` model
+- [ ] Implement database models (`models/database.py`)
+
+#### Phase 3: Utility Modules
+- [ ] Implement encoding detector (`utils/encoding_detector.py`)
+- [ ] Implement unit converter (`utils/unit_converter.py`)
+- [ ] Implement logging setup (`utils/logging.py`)
+
+#### Phase 4: Protocol Handlers
+- [ ] Implement MQTT handler (`protocols/mqtt_handler.py`)
+- [ ] Implement HTTP handler (`protocols/http_handler.py`)
+- [ ] Implement CoAP handler (`protocols/coap_handler.py`)
+- [ ] Implement Modbus handler (`protocols/modbus_handler.py`)
+- [ ] Implement OPC-UA handler (`protocols/opcua_handler.py`)
+- [ ] Implement WebSocket handler (`protocols/websocket_handler.py`)
+
+#### Phase 5: Core Modules
+- [ ] Implement Protocol Listener (`modules/protocol_listener.py`)
+- [ ] Implement Schema Extractor (`modules/schema_extractor.py`)
+- [ ] Implement Semantic Translator (`modules/semantic_translator.py`)
+- [ ] Implement Ontology Registry (`modules/ontology_registry.py`)
+- [ ] Implement Normalization Engine (`modules/normalization_engine.py`)
+- [ ] Implement Output Broker (`modules/output_broker.py`)
+
+#### Phase 6: Services
+- [ ] Implement LLM service (`services/llm_service.py`)
+- [ ] Implement Embedding service (`services/embedding_service.py`)
+- [ ] Implement Device Registry (`services/device_registry.py`)
+
+#### Phase 7: API Layer
+- [ ] Implement FastAPI main app (`app/main.py`)
+- [ ] Implement dependency injection (`app/dependencies.py`)
+- [ ] Implement ingest routes (`api/routes/ingest.py`)
+- [ ] Implement devices routes (`api/routes/devices.py`)
+- [ ] Implement ontology routes (`api/routes/ontology.py`)
+- [ ] Implement schemas routes (`api/routes/schemas.py`)
+- [ ] Implement WebSocket endpoint (`api/websocket.py`)
+
+#### Phase 8: Ontology & Seed Data
+- [ ] Create seed ontology data (`ontology/seed_data.json`)
+- [ ] Set up ontology migrations
+
+#### Phase 9: Docker & Deployment
+- [ ] Create Dockerfile (`docker/Dockerfile`)
+- [ ] Create edge Dockerfile (`docker/Dockerfile.edge`)
+- [ ] Create docker-compose.yaml (`docker/docker-compose.yaml`)
+
+#### Phase 10: Testing
+- [ ] Set up pytest configuration (`tests/conftest.py`)
+- [ ] Create test fixtures (`tests/fixtures/`)
+- [ ] Implement unit tests for all modules
+- [ ] Implement integration tests
+
+---
+
 *Specification complete. Ready for implementation.*
