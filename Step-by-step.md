@@ -7,15 +7,15 @@ Foundation & Planning
 - [x] Set up project structure (src/, tests/, docs/)
 - [x] Define coding conventions & style guide
 - [x] Create dependency manifest (package.json, requirements.txt)
-- [ ] Configure environment management (Docker, venv, etc.)
+- [x] Configure environment management (Docker, venv, etc.)
 - [x] Write initial README.md
 
 Core Implementation
 - [x] Implement core logic per spec
 - [ ] Refactor for reusable components (DRY)
-- [ ] Add input validation & sanitation
-- [ ] Implement error handling
-- [ ] Add general logging
+- [x] Add input validation & sanitation
+- [x] Implement error handling
+- [x] Add general logging
 - [ ] Add error logging (Sentry, ELK, etc.)
 - [ ] Secure configuration (.env or secrets manager)
 - [ ] Add command-line interface (if needed)
