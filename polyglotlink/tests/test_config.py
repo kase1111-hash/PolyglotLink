@@ -3,16 +3,17 @@ Unit tests for the Configuration module.
 """
 
 import os
-import pytest
 from unittest.mock import patch
 
+import pytest
+
 from polyglotlink.utils.config import (
+    HTTPListenerSettings,
+    LLMSettings,
+    MQTTListenerSettings,
     Settings,
     get_settings,
     reload_settings,
-    LLMSettings,
-    MQTTListenerSettings,
-    HTTPListenerSettings,
 )
 
 
@@ -36,6 +37,7 @@ class TestLLMSettings:
 
         # Invalid temperature
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             LLMSettings(temperature=-0.1)
 
@@ -47,6 +49,7 @@ class TestLLMSettings:
         assert settings.max_tokens == 100
 
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             LLMSettings(max_tokens=50)  # Below minimum
 
@@ -56,6 +59,7 @@ class TestLLMSettings:
         assert settings.embedding_threshold == 0.5
 
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             LLMSettings(EMBEDDING_THRESHOLD=1.5)
 
@@ -75,6 +79,7 @@ class TestMQTTListenerSettings:
         assert settings.broker_port == 8883
 
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             MQTTListenerSettings(broker_port=0)
 
@@ -89,6 +94,7 @@ class TestMQTTListenerSettings:
         assert settings.qos == 2
 
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             MQTTListenerSettings(qos=3)
 
@@ -103,6 +109,7 @@ class TestMQTTListenerSettings:
     def test_tls_validation(self):
         # TLS enabled without cert should fail
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             MQTTListenerSettings(tls_enabled=True, ca_cert=None)
 
@@ -147,6 +154,7 @@ class TestSettings:
         assert settings.log_level == "INFO"
 
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             Settings(LOG_LEVEL="INVALID")
 
@@ -159,6 +167,7 @@ class TestSettings:
         assert settings.env == "development"
 
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             Settings(POLYGLOTLINK_ENV="invalid_env")
 
@@ -176,7 +185,7 @@ class TestSettings:
     def test_environment_variable_loading(self):
         # Clear cache to pick up new env vars
         reload_settings()
-        settings = get_settings()
+        _settings = get_settings()
         # Note: actual values depend on how pydantic-settings loads them
 
 

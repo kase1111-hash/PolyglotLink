@@ -7,14 +7,13 @@ handling unit conversions, type enforcement, and value validation.
 
 import re
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import structlog
 
 from polyglotlink.models.schemas import (
     ConversionRecord,
     ExtractedSchema,
-    FieldMapping,
     NormalizationConfig,
     NormalizedMessage,
     SemanticMapping,
@@ -29,126 +28,69 @@ logger = structlog.get_logger(__name__)
 # Unit Conversion Registry
 # ============================================================================
 
-UNIT_CONVERSIONS: Dict[str, Dict[str, str]] = {
+UNIT_CONVERSIONS: dict[str, dict[str, str]] = {
     # Temperature
-    "celsius": {
-        "fahrenheit": "(value * 9/5) + 32",
-        "kelvin": "value + 273.15"
-    },
-    "fahrenheit": {
-        "celsius": "(value - 32) * 5/9",
-        "kelvin": "(value - 32) * 5/9 + 273.15"
-    },
-    "kelvin": {
-        "celsius": "value - 273.15",
-        "fahrenheit": "(value - 273.15) * 9/5 + 32"
-    },
-
+    "celsius": {"fahrenheit": "(value * 9/5) + 32", "kelvin": "value + 273.15"},
+    "fahrenheit": {"celsius": "(value - 32) * 5/9", "kelvin": "(value - 32) * 5/9 + 273.15"},
+    "kelvin": {"celsius": "value - 273.15", "fahrenheit": "(value - 273.15) * 9/5 + 32"},
     # Pressure
-    "pascal": {
-        "bar": "value / 100000",
-        "psi": "value * 0.000145038",
-        "hectopascal": "value / 100"
-    },
-    "bar": {
-        "pascal": "value * 100000",
-        "psi": "value * 14.5038"
-    },
-    "psi": {
-        "pascal": "value / 0.000145038",
-        "bar": "value / 14.5038"
-    },
-    "hectopascal": {
-        "pascal": "value * 100"
-    },
-
+    "pascal": {"bar": "value / 100000", "psi": "value * 0.000145038", "hectopascal": "value / 100"},
+    "bar": {"pascal": "value * 100000", "psi": "value * 14.5038"},
+    "psi": {"pascal": "value / 0.000145038", "bar": "value / 14.5038"},
+    "hectopascal": {"pascal": "value * 100"},
     # Speed
     "meters_per_second": {
         "kilometers_per_hour": "value * 3.6",
-        "miles_per_hour": "value * 2.23694"
+        "miles_per_hour": "value * 2.23694",
     },
     "kilometers_per_hour": {
         "meters_per_second": "value / 3.6",
-        "miles_per_hour": "value * 0.621371"
+        "miles_per_hour": "value * 0.621371",
     },
     "miles_per_hour": {
         "meters_per_second": "value / 2.23694",
-        "kilometers_per_hour": "value / 0.621371"
+        "kilometers_per_hour": "value / 0.621371",
     },
-
     # Length
     "meter": {
         "centimeter": "value * 100",
         "millimeter": "value * 1000",
         "kilometer": "value / 1000",
-        "feet": "value * 3.28084"
+        "feet": "value * 3.28084",
     },
-    "centimeter": {
-        "meter": "value / 100",
-        "millimeter": "value * 10"
-    },
-    "millimeter": {
-        "meter": "value / 1000",
-        "centimeter": "value / 10"
-    },
-
+    "centimeter": {"meter": "value / 100", "millimeter": "value * 10"},
+    "millimeter": {"meter": "value / 1000", "centimeter": "value / 10"},
     # Mass
-    "kilogram": {
-        "gram": "value * 1000",
-        "pound": "value * 2.20462"
-    },
-    "gram": {
-        "kilogram": "value / 1000"
-    },
-
+    "kilogram": {"gram": "value * 1000", "pound": "value * 2.20462"},
+    "gram": {"kilogram": "value / 1000"},
     # Volume
-    "liter": {
-        "milliliter": "value * 1000",
-        "gallon": "value * 0.264172"
-    },
-    "milliliter": {
-        "liter": "value / 1000"
-    },
-
+    "liter": {"milliliter": "value * 1000", "gallon": "value * 0.264172"},
+    "milliliter": {"liter": "value / 1000"},
     # Percentage/Ratio
-    "percent": {
-        "ratio": "value / 100"
-    },
-    "ratio": {
-        "percent": "value * 100"
-    },
-
+    "percent": {"ratio": "value / 100"},
+    "ratio": {"percent": "value * 100"},
     # Time
-    "seconds": {
-        "milliseconds": "value * 1000",
-        "minutes": "value / 60"
-    },
-    "milliseconds": {
-        "seconds": "value / 1000"
-    },
-    "minutes": {
-        "seconds": "value * 60"
-    }
+    "seconds": {"milliseconds": "value * 1000", "minutes": "value / 60"},
+    "milliseconds": {"seconds": "value / 1000"},
+    "minutes": {"seconds": "value * 60"},
 }
 
 
-def get_unit_conversion(from_unit: str, to_unit: str) -> Optional[str]:
+def get_unit_conversion(from_unit: str, to_unit: str) -> str | None:
     """Get conversion formula between units."""
     if from_unit == to_unit:
         return None
 
-    if from_unit in UNIT_CONVERSIONS:
-        if to_unit in UNIT_CONVERSIONS[from_unit]:
-            return UNIT_CONVERSIONS[from_unit][to_unit]
+    if from_unit in UNIT_CONVERSIONS and to_unit in UNIT_CONVERSIONS[from_unit]:
+        return UNIT_CONVERSIONS[from_unit][to_unit]
 
     # Try transitive conversion (limited to 2 hops)
     if from_unit in UNIT_CONVERSIONS:
         for intermediate, formula1 in UNIT_CONVERSIONS[from_unit].items():
-            if intermediate in UNIT_CONVERSIONS:
-                if to_unit in UNIT_CONVERSIONS[intermediate]:
-                    formula2 = UNIT_CONVERSIONS[intermediate][to_unit]
-                    # Compose formulas
-                    return f"({formula2.replace('value', f'({formula1})')})"
+            if intermediate in UNIT_CONVERSIONS and to_unit in UNIT_CONVERSIONS[intermediate]:
+                formula2 = UNIT_CONVERSIONS[intermediate][to_unit]
+                # Compose formulas
+                return f"({formula2.replace('value', f'({formula1})')})"
 
     return None
 
@@ -157,13 +99,16 @@ def get_unit_conversion(from_unit: str, to_unit: str) -> Optional[str]:
 # Safe Formula Execution
 # ============================================================================
 
+
 class UnsafeFormulaError(Exception):
     """Raised when a formula contains unsafe operations."""
+
     pass
 
 
 class ConversionError(Exception):
     """Raised when unit conversion fails."""
+
     pass
 
 
@@ -180,7 +125,7 @@ def apply_conversion(value: Any, formula: str) -> float:
         raise UnsafeFormulaError(f"Unsafe characters in formula: {formula}")
 
     # Additional validation: no function calls or assignments
-    if re.search(r'[a-z_][a-z0-9_]*\s*\(', formula.replace('value', '')):
+    if re.search(r"[a-z_][a-z0-9_]*\s*\(", formula.replace("value", "")):
         raise UnsafeFormulaError(f"Function calls not allowed in formula: {formula}")
 
     try:
@@ -194,6 +139,7 @@ def apply_conversion(value: Any, formula: str) -> float:
 # ============================================================================
 # Type Enforcement
 # ============================================================================
+
 
 def enforce_type(value: Any, target_type: str) -> Any:
     """Cast value to expected type."""
@@ -217,7 +163,7 @@ def enforce_type(value: Any, target_type: str) -> Any:
             if isinstance(value, datetime):
                 return value
             if isinstance(value, str):
-                return datetime.fromisoformat(value.replace('Z', '+00:00'))
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
             if isinstance(value, (int, float)):
                 # Unix timestamp
                 if value > 1e12:
@@ -232,6 +178,7 @@ def enforce_type(value: Any, target_type: str) -> Any:
 # Value Validation
 # ============================================================================
 
+
 class Concept:
     """Simplified concept for validation (when ontology not available)."""
 
@@ -239,8 +186,8 @@ class Concept:
         self,
         concept_id: str,
         datatype: str = "float",
-        min_value: Optional[float] = None,
-        max_value: Optional[float] = None
+        min_value: float | None = None,
+        max_value: float | None = None,
     ):
         self.concept_id = concept_id
         self.datatype = datatype
@@ -249,7 +196,7 @@ class Concept:
 
 
 # Default validation constraints
-DEFAULT_CONSTRAINTS: Dict[str, Concept] = {
+DEFAULT_CONSTRAINTS: dict[str, Concept] = {
     "temperature_celsius": Concept("temperature_celsius", "float", -273.15, 1000),
     "humidity_percent": Concept("humidity_percent", "float", 0, 100),
     "battery_percent": Concept("battery_percent", "float", 0, 100),
@@ -270,20 +217,17 @@ def validate_value(value: Any, concept: Concept) -> bool:
     if concept.min_value is not None and value < concept.min_value:
         return False
 
-    if concept.max_value is not None and value > concept.max_value:
-        return False
-
-    return True
+    return not (concept.max_value is not None and value > concept.max_value)
 
 
 # ============================================================================
 # Timestamp Extraction
 # ============================================================================
 
+
 def extract_timestamp(
-    schema: ExtractedSchema,
-    timestamp_fields: List[str] = None
-) -> Optional[datetime]:
+    schema: ExtractedSchema, timestamp_fields: list[str] = None
+) -> datetime | None:
     """Extract timestamp from schema fields."""
     if timestamp_fields is None:
         timestamp_fields = ["timestamp", "ts", "time", "datetime", "created_at"]
@@ -310,16 +254,17 @@ def extract_timestamp(
 # Metadata Enrichment
 # ============================================================================
 
+
 class DeviceInfo:
     """Device information for metadata enrichment."""
 
     def __init__(
         self,
         device_id: str,
-        device_type: Optional[str] = None,
-        name: Optional[str] = None,
-        location: Optional[str] = None,
-        tags: Optional[List[str]] = None
+        device_type: str | None = None,
+        name: str | None = None,
+        location: str | None = None,
+        tags: list[str] | None = None,
     ):
         self.device_id = device_id
         self.type = device_type
@@ -332,13 +277,13 @@ class DeviceRegistry:
     """Simple in-memory device registry."""
 
     def __init__(self):
-        self._devices: Dict[str, DeviceInfo] = {}
+        self._devices: dict[str, DeviceInfo] = {}
 
     def register(self, device: DeviceInfo) -> None:
         """Register a device."""
         self._devices[device.device_id] = device
 
-    def get(self, device_id: str) -> Optional[DeviceInfo]:
+    def get(self, device_id: str) -> DeviceInfo | None:
         """Get device info."""
         return self._devices.get(device_id)
 
@@ -352,16 +297,14 @@ class DeviceRegistry:
 
 
 def enrich_metadata(
-    schema: ExtractedSchema,
-    mapping: SemanticMapping,
-    device_registry: Optional[DeviceRegistry] = None
-) -> Dict[str, Any]:
+    schema: ExtractedSchema, mapping: SemanticMapping, device_registry: DeviceRegistry | None = None
+) -> dict[str, Any]:
     """Add contextual metadata to the normalized message."""
     metadata = {
         "source_protocol": schema.protocol.value,
         "source_topic": schema.topic,
         "translation_confidence": mapping.confidence,
-        "schema_signature": schema.schema_signature
+        "schema_signature": schema.schema_signature,
     }
 
     # Add device registry info if available
@@ -388,6 +331,7 @@ def enrich_metadata(
 # Normalization Engine
 # ============================================================================
 
+
 class NormalizationEngine:
     """
     Normalizes semantic mappings into standardized messages.
@@ -395,25 +339,23 @@ class NormalizationEngine:
 
     def __init__(
         self,
-        config: Optional[NormalizationConfig] = None,
+        config: NormalizationConfig | None = None,
         ontology_registry=None,
-        device_registry: Optional[DeviceRegistry] = None
+        device_registry: DeviceRegistry | None = None,
     ):
         self.config = config or NormalizationConfig()
         self.ontology_registry = ontology_registry
         self.device_registry = device_registry or DeviceRegistry()
 
     def normalize_message(
-        self,
-        schema: ExtractedSchema,
-        mapping: SemanticMapping
+        self, schema: ExtractedSchema, mapping: SemanticMapping
     ) -> NormalizedMessage:
         """
         Apply semantic mapping to raw values and produce normalized message.
         """
-        normalized_fields: Dict[str, Any] = {}
-        validation_errors: List[ValidationError] = []
-        conversions_applied: List[ConversionRecord] = []
+        normalized_fields: dict[str, Any] = {}
+        validation_errors: list[ValidationError] = []
+        conversions_applied: list[ConversionRecord] = []
 
         # Build lookup from source field to mapping
         mapping_lookup = {m.source_field: m for m in mapping.field_mappings}
@@ -432,9 +374,7 @@ class NormalizationEngine:
 
             # Handle null values
             if value is None:
-                normalized_fields[target_field] = self._handle_null(
-                    field_mapping.target_concept
-                )
+                normalized_fields[target_field] = self._handle_null(field_mapping.target_concept)
                 continue
 
             # Step 1: Unit conversion
@@ -442,45 +382,44 @@ class NormalizationEngine:
                 try:
                     original_value = value
                     value = apply_conversion(value, field_mapping.conversion_formula)
-                    conversions_applied.append(ConversionRecord(
-                        field=field.key,
-                        from_unit=field_mapping.source_unit or "unknown",
-                        to_unit=field_mapping.target_unit or "unknown",
-                        original_value=original_value,
-                        converted_value=value
-                    ))
+                    conversions_applied.append(
+                        ConversionRecord(
+                            field=field.key,
+                            from_unit=field_mapping.source_unit or "unknown",
+                            to_unit=field_mapping.target_unit or "unknown",
+                            original_value=original_value,
+                            converted_value=value,
+                        )
+                    )
                 except (ConversionError, UnsafeFormulaError) as e:
-                    validation_errors.append(ValidationError(
-                        field=field.key,
-                        error=ValidationErrorType.CONVERSION_FAILED,
-                        details=str(e)
-                    ))
+                    validation_errors.append(
+                        ValidationError(
+                            field=field.key,
+                            error=ValidationErrorType.CONVERSION_FAILED,
+                            details=str(e),
+                        )
+                    )
                     if self.config.include_invalid:
                         normalized_fields[f"_error.{target_field}"] = field.value
                     continue
             elif field_mapping.source_unit and field_mapping.target_unit:
                 # Try to find conversion formula
-                formula = get_unit_conversion(
-                    field_mapping.source_unit,
-                    field_mapping.target_unit
-                )
+                formula = get_unit_conversion(field_mapping.source_unit, field_mapping.target_unit)
                 if formula:
                     try:
                         original_value = value
                         value = apply_conversion(value, formula)
-                        conversions_applied.append(ConversionRecord(
-                            field=field.key,
-                            from_unit=field_mapping.source_unit,
-                            to_unit=field_mapping.target_unit,
-                            original_value=original_value,
-                            converted_value=value
-                        ))
-                    except (ConversionError, UnsafeFormulaError) as e:
-                        logger.warning(
-                            "Auto-conversion failed",
-                            field=field.key,
-                            error=str(e)
+                        conversions_applied.append(
+                            ConversionRecord(
+                                field=field.key,
+                                from_unit=field_mapping.source_unit,
+                                to_unit=field_mapping.target_unit,
+                                original_value=original_value,
+                                converted_value=value,
+                            )
                         )
+                    except (ConversionError, UnsafeFormulaError) as e:
+                        logger.warning("Auto-conversion failed", field=field.key, error=str(e))
 
             # Step 2: Type enforcement
             concept = self._get_concept(field_mapping.target_concept)
@@ -488,26 +427,30 @@ class NormalizationEngine:
                 try:
                     value = enforce_type(value, concept.datatype)
                 except TypeError as e:
-                    validation_errors.append(ValidationError(
-                        field=field.key,
-                        error=ValidationErrorType.TYPE_MISMATCH,
-                        expected=concept.datatype,
-                        actual=type(field.value).__name__,
-                        details=str(e)
-                    ))
+                    validation_errors.append(
+                        ValidationError(
+                            field=field.key,
+                            error=ValidationErrorType.TYPE_MISMATCH,
+                            expected=concept.datatype,
+                            actual=type(field.value).__name__,
+                            details=str(e),
+                        )
+                    )
                     if self.config.include_invalid:
                         normalized_fields[f"_error.{target_field}"] = field.value
                     continue
 
                 # Step 3: Value validation
                 if not validate_value(value, concept):
-                    validation_errors.append(ValidationError(
-                        field=field.key,
-                        error=ValidationErrorType.OUT_OF_RANGE,
-                        value=value,
-                        min=concept.min_value,
-                        max=concept.max_value
-                    ))
+                    validation_errors.append(
+                        ValidationError(
+                            field=field.key,
+                            error=ValidationErrorType.OUT_OF_RANGE,
+                            value=value,
+                            min=concept.min_value,
+                            max=concept.max_value,
+                        )
+                    )
                     if self.config.include_invalid:
                         normalized_fields[f"_invalid.{target_field}"] = value
                     continue
@@ -535,10 +478,10 @@ class NormalizationEngine:
             confidence=mapping.confidence,
             conversions=conversions_applied,
             validation_errors=validation_errors,
-            normalized_at=datetime.utcnow()
+            normalized_at=datetime.utcnow(),
         )
 
-    def _get_concept(self, concept_id: str) -> Optional[Concept]:
+    def _get_concept(self, concept_id: str) -> Concept | None:
         """Get concept from registry or defaults."""
         if self.ontology_registry:
             concept = self.ontology_registry.get_concept(concept_id)
@@ -576,18 +519,14 @@ class NormalizationEngine:
     def register_device(
         self,
         device_id: str,
-        device_type: Optional[str] = None,
-        name: Optional[str] = None,
-        location: Optional[str] = None,
-        tags: Optional[List[str]] = None
+        device_type: str | None = None,
+        name: str | None = None,
+        location: str | None = None,
+        tags: list[str] | None = None,
     ) -> None:
         """Register a device for metadata enrichment."""
         device = DeviceInfo(
-            device_id=device_id,
-            device_type=device_type,
-            name=name,
-            location=location,
-            tags=tags
+            device_id=device_id, device_type=device_type, name=name, location=location, tags=tags
         )
         self.device_registry.register(device)
         logger.info("Device registered", device_id=device_id)

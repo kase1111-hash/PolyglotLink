@@ -7,11 +7,11 @@ IoT fields to standardized ontology concepts.
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
 
 import structlog
 
 from polyglotlink.models.schemas import (
+    CachedMapping,
     ExtractedField,
     ExtractedSchema,
     FieldMapping,
@@ -89,96 +89,96 @@ DEFAULT_ONTOLOGY_CONCEPTS = [
         "description": "Temperature in degrees Celsius",
         "unit": "celsius",
         "datatype": "float",
-        "aliases": ["tmp", "temp", "temperature", "t", "thermo"]
+        "aliases": ["tmp", "temp", "temperature", "t", "thermo"],
     },
     {
         "concept_id": "humidity_percent",
         "description": "Relative humidity percentage",
         "unit": "percent",
         "datatype": "float",
-        "aliases": ["hum", "humidity", "rh", "relative_humidity"]
+        "aliases": ["hum", "humidity", "rh", "relative_humidity"],
     },
     {
         "concept_id": "pressure_pascal",
         "description": "Atmospheric or process pressure",
         "unit": "pascal",
         "datatype": "float",
-        "aliases": ["press", "pressure", "baro", "atm"]
+        "aliases": ["press", "pressure", "baro", "atm"],
     },
     {
         "concept_id": "co2_ppm",
         "description": "Carbon dioxide concentration",
         "unit": "ppm",
         "datatype": "float",
-        "aliases": ["co2", "carbon_dioxide", "co2_level"]
+        "aliases": ["co2", "carbon_dioxide", "co2_level"],
     },
     {
         "concept_id": "voltage_volt",
         "description": "Electrical voltage",
         "unit": "volt",
         "datatype": "float",
-        "aliases": ["volt", "voltage", "v", "vdc", "vac"]
+        "aliases": ["volt", "voltage", "v", "vdc", "vac"],
     },
     {
         "concept_id": "current_ampere",
         "description": "Electrical current",
         "unit": "ampere",
         "datatype": "float",
-        "aliases": ["current", "amp", "ampere", "i", "amps"]
+        "aliases": ["current", "amp", "ampere", "i", "amps"],
     },
     {
         "concept_id": "power_watt",
         "description": "Electrical power",
         "unit": "watt",
         "datatype": "float",
-        "aliases": ["power", "watt", "w", "watts"]
+        "aliases": ["power", "watt", "w", "watts"],
     },
     {
         "concept_id": "latitude_degrees",
         "description": "Geographic latitude",
         "unit": "degrees",
         "datatype": "float",
-        "aliases": ["lat", "latitude"]
+        "aliases": ["lat", "latitude"],
     },
     {
         "concept_id": "longitude_degrees",
         "description": "Geographic longitude",
         "unit": "degrees",
         "datatype": "float",
-        "aliases": ["lon", "lng", "longitude"]
+        "aliases": ["lon", "lng", "longitude"],
     },
     {
         "concept_id": "speed_mps",
         "description": "Speed in meters per second",
         "unit": "meters_per_second",
         "datatype": "float",
-        "aliases": ["speed", "velocity", "spd"]
+        "aliases": ["speed", "velocity", "spd"],
     },
     {
         "concept_id": "battery_percent",
         "description": "Battery charge level",
         "unit": "percent",
         "datatype": "float",
-        "aliases": ["battery", "batt", "bat_level", "charge"]
+        "aliases": ["battery", "batt", "bat_level", "charge"],
     },
     {
         "concept_id": "signal_rssi",
         "description": "Signal strength (RSSI)",
         "unit": "dbm",
         "datatype": "integer",
-        "aliases": ["rssi", "signal", "signal_strength"]
+        "aliases": ["rssi", "signal", "signal_strength"],
     },
     {
         "concept_id": "connectivity_status",
         "description": "Online/offline status",
         "unit": "boolean",
         "datatype": "boolean",
-        "aliases": ["online", "connected", "alive", "status"]
-    }
+        "aliases": ["online", "connected", "alive", "status"],
+    },
 ]
 
 
-def build_fields_table(fields: List[ExtractedField]) -> str:
+def build_fields_table(fields: list[ExtractedField]) -> str:
     """Build a markdown table of fields for the LLM prompt."""
     rows = ["| Field | Value | Type | Inferred Unit | Semantic Hint |"]
     rows.append("|-------|-------|------|---------------|---------------|")
@@ -198,8 +198,7 @@ def build_fields_table(fields: List[ExtractedField]) -> str:
 
 
 def build_ontology_context(
-    fields: List[ExtractedField],
-    ontology_concepts: Optional[List[Dict]] = None
+    fields: list[ExtractedField], ontology_concepts: list[dict] | None = None
 ) -> str:
     """Build ontology context for the LLM prompt."""
     concepts = ontology_concepts or DEFAULT_ONTOLOGY_CONCEPTS
@@ -211,23 +210,23 @@ def build_ontology_context(
     for field in fields:
         if field.inferred_semantic:
             for concept in concepts:
-                if concept['concept_id'] not in seen_ids:
+                if concept["concept_id"] not in seen_ids:
                     # Check if any alias matches the semantic hint
-                    aliases = concept.get('aliases', [])
+                    aliases = concept.get("aliases", [])
                     if any(alias in field.inferred_semantic.lower() for alias in aliases):
                         relevant_concepts.append(concept)
-                        seen_ids.add(concept['concept_id'])
+                        seen_ids.add(concept["concept_id"])
 
     # Add popular concepts that weren't matched
     for concept in concepts[:20]:
-        if concept['concept_id'] not in seen_ids:
+        if concept["concept_id"] not in seen_ids:
             relevant_concepts.append(concept)
-            seen_ids.add(concept['concept_id'])
+            seen_ids.add(concept["concept_id"])
 
     # Format for prompt
     lines = []
     for concept in relevant_concepts[:50]:
-        aliases = ", ".join(concept.get('aliases', [])[:3])
+        aliases = ", ".join(concept.get("aliases", [])[:3])
         lines.append(
             f"- {concept['concept_id']}: {concept['description']} "
             f"(unit: {concept['unit']}, type: {concept['datatype']}, aliases: {aliases})"
@@ -240,6 +239,7 @@ def build_ontology_context(
 # Embedding-Based Resolution
 # ============================================================================
 
+
 class EmbeddingResolver:
     """Resolves field mappings using vector similarity."""
 
@@ -248,42 +248,39 @@ class EmbeddingResolver:
         embedding_model: str = "text-embedding-3-large",
         threshold: float = 0.85,
         weaviate_client=None,
-        openai_client=None
+        openai_client=None,
     ):
         self.embedding_model = embedding_model
         self.threshold = threshold
         self.weaviate = weaviate_client
         self.openai = openai_client
-        self._concept_embeddings: Dict[str, List[float]] = {}
+        self._concept_embeddings: dict[str, list[float]] = {}
         self._initialized = False
 
-    async def initialize(self, concepts: List[Dict]) -> None:
+    async def initialize(self, concepts: list[dict]) -> None:
         """Pre-compute embeddings for all ontology concepts."""
         if self._initialized:
             return
 
         for concept in concepts:
             # Create embedding text from concept info
-            text = f"{concept['concept_id']} {concept['description']} " + \
-                   " ".join(concept.get('aliases', []))
+            text = f"{concept['concept_id']} {concept['description']} " + " ".join(
+                concept.get("aliases", [])
+            )
 
             embedding = await self._get_embedding(text)
             if embedding:
-                self._concept_embeddings[concept['concept_id']] = embedding
+                self._concept_embeddings[concept["concept_id"]] = embedding
 
         self._initialized = True
-        logger.info(
-            "Embedding resolver initialized",
-            concepts=len(self._concept_embeddings)
-        )
+        logger.info("Embedding resolver initialized", concepts=len(self._concept_embeddings))
 
-    async def _get_embedding(self, text: str) -> Optional[List[float]]:
+    async def _get_embedding(self, text: str) -> list[float] | None:
         """Get embedding for text using OpenAI or fallback."""
         if self.openai:
             try:
                 response = await self.openai.embeddings.create(
-                    model=self.embedding_model,
-                    input=text
+                    model=self.embedding_model, input=text
                 )
                 return response.data[0].embedding
             except Exception as e:
@@ -292,12 +289,13 @@ class EmbeddingResolver:
         # Fallback: simple hash-based pseudo-embedding
         # This is just for testing without OpenAI
         import hashlib
+
         hash_bytes = hashlib.sha256(text.encode()).digest()
         return [float(b) / 255.0 for b in hash_bytes]
 
-    def _cosine_similarity(self, a: List[float], b: List[float]) -> float:
+    def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
         """Compute cosine similarity between two vectors."""
-        dot_product = sum(x * y for x, y in zip(a, b))
+        dot_product = sum(x * y for x, y in zip(a, b, strict=True))
         norm_a = sum(x * x for x in a) ** 0.5
         norm_b = sum(x * x for x in b) ** 0.5
         if norm_a == 0 or norm_b == 0:
@@ -305,10 +303,8 @@ class EmbeddingResolver:
         return dot_product / (norm_a * norm_b)
 
     async def resolve(
-        self,
-        field: ExtractedField,
-        concepts: Optional[List[Dict]] = None
-    ) -> Optional[FieldMapping]:
+        self, field: ExtractedField, concepts: list[dict] | None = None
+    ) -> FieldMapping | None:
         """
         Attempt to resolve field mapping using vector similarity.
         """
@@ -325,13 +321,15 @@ class EmbeddingResolver:
         # Check Weaviate if available
         if self.weaviate:
             try:
-                results = self.weaviate.query.get(
-                    "OntologyConcept",
-                    ["concept_id", "canonical_name", "unit", "datatype", "aliases"]
-                ).with_near_vector({
-                    "vector": query_embedding,
-                    "certainty": self.threshold
-                }).with_limit(5).do()
+                results = (
+                    self.weaviate.query.get(
+                        "OntologyConcept",
+                        ["concept_id", "canonical_name", "unit", "datatype", "aliases"],
+                    )
+                    .with_near_vector({"vector": query_embedding, "certainty": self.threshold})
+                    .with_limit(5)
+                    .do()
+                )
 
                 if results.get("data", {}).get("Get", {}).get("OntologyConcept"):
                     best_match = results["data"]["Get"]["OntologyConcept"][0]
@@ -346,7 +344,7 @@ class EmbeddingResolver:
                             target_unit=best_match["unit"],
                             conversion_formula=None,  # Determined later
                             confidence=certainty,
-                            resolution_method=ResolutionMethod.EMBEDDING
+                            resolution_method=ResolutionMethod.EMBEDDING,
                         )
             except Exception as e:
                 logger.warning("Weaviate query failed", error=str(e))
@@ -364,7 +362,7 @@ class EmbeddingResolver:
         if best_match and best_similarity >= self.threshold:
             # Find the concept details
             concepts_list = concepts or DEFAULT_ONTOLOGY_CONCEPTS
-            concept = next((c for c in concepts_list if c['concept_id'] == best_match), None)
+            concept = next((c for c in concepts_list if c["concept_id"] == best_match), None)
 
             if concept:
                 return FieldMapping(
@@ -372,10 +370,10 @@ class EmbeddingResolver:
                     target_concept=best_match,
                     target_field=best_match,
                     source_unit=field.inferred_unit,
-                    target_unit=concept['unit'],
+                    target_unit=concept["unit"],
                     conversion_formula=None,
                     confidence=best_similarity,
-                    resolution_method=ResolutionMethod.EMBEDDING
+                    resolution_method=ResolutionMethod.EMBEDDING,
                 )
 
         return None
@@ -385,23 +383,20 @@ class EmbeddingResolver:
 # LLM-Based Translation
 # ============================================================================
 
+
 class LLMTranslator:
     """Handles LLM-based semantic translation."""
 
-    def __init__(
-        self,
-        config: SemanticTranslatorConfig,
-        openai_client=None
-    ):
+    def __init__(self, config: SemanticTranslatorConfig, openai_client=None):
         self.config = config
         self.openai = openai_client
 
     async def translate(
         self,
         schema: ExtractedSchema,
-        fields: List[ExtractedField],
-        ontology_concepts: Optional[List[Dict]] = None
-    ) -> Tuple[List[FieldMapping], Optional[str], List[SuggestedConcept]]:
+        fields: list[ExtractedField],
+        ontology_concepts: list[dict] | None = None,
+    ) -> tuple[list[FieldMapping], str | None, list[SuggestedConcept]]:
         """
         Use LLM to translate fields to ontology concepts.
         Returns: (mappings, device_context, suggested_concepts)
@@ -412,7 +407,7 @@ class LLMTranslator:
             topic=schema.topic,
             device_id=schema.device_id,
             fields_table=build_fields_table(fields),
-            ontology_concepts=build_ontology_context(fields, ontology_concepts)
+            ontology_concepts=build_ontology_context(fields, ontology_concepts),
         )
 
         # Call LLM
@@ -427,7 +422,8 @@ class LLMTranslator:
         except json.JSONDecodeError:
             # Try to extract JSON from response
             import re
-            json_match = re.search(r'\{[\s\S]*\}', response_text)
+
+            json_match = re.search(r"\{[\s\S]*\}", response_text)
             if json_match:
                 try:
                     response = json.loads(json_match.group())
@@ -440,18 +436,18 @@ class LLMTranslator:
 
         # Convert to FieldMapping objects
         mappings = []
-        for m in response.get('mappings', []):
+        for m in response.get("mappings", []):
             try:
                 mapping = FieldMapping(
-                    source_field=m['source_field'],
-                    target_concept=m['target_concept'],
-                    target_field=m['target_field'],
-                    source_unit=m.get('source_unit'),
-                    target_unit=m.get('target_unit'),
-                    conversion_formula=m.get('conversion_formula'),
-                    confidence=float(m.get('confidence', 0.8)),
+                    source_field=m["source_field"],
+                    target_concept=m["target_concept"],
+                    target_field=m["target_field"],
+                    source_unit=m.get("source_unit"),
+                    target_unit=m.get("target_unit"),
+                    conversion_formula=m.get("conversion_formula"),
+                    confidence=float(m.get("confidence", 0.8)),
                     resolution_method=ResolutionMethod.LLM,
-                    reasoning=m.get('reasoning')
+                    reasoning=m.get("reasoning"),
                 )
                 mappings.append(mapping)
             except Exception as e:
@@ -459,24 +455,24 @@ class LLMTranslator:
 
         # Parse suggested concepts
         suggested_concepts = []
-        for sc in response.get('suggested_new_concepts', []):
+        for sc in response.get("suggested_new_concepts", []):
             try:
                 concept = SuggestedConcept(
-                    concept_id=sc['concept_id'],
-                    description=sc['description'],
-                    unit=sc['unit'],
-                    datatype=sc['datatype'],
-                    aliases=sc.get('aliases', [])
+                    concept_id=sc["concept_id"],
+                    description=sc["description"],
+                    unit=sc["unit"],
+                    datatype=sc["datatype"],
+                    aliases=sc.get("aliases", []),
                 )
                 suggested_concepts.append(concept)
             except Exception as e:
                 logger.warning("Failed to parse suggested concept", error=str(e))
 
-        device_context = response.get('device_context')
+        device_context = response.get("device_context")
 
         return mappings, device_context, suggested_concepts
 
-    async def _call_llm(self, prompt: str) -> Optional[str]:
+    async def _call_llm(self, prompt: str) -> str | None:
         """Call the configured LLM."""
         if self.openai:
             for attempt in range(self.config.max_llm_retries):
@@ -484,39 +480,37 @@ class LLMTranslator:
                     response = await self.openai.chat.completions.create(
                         model=self.config.llm_model,
                         messages=[
-                            {"role": "system", "content": "You are an IoT data semantics expert. Respond only with valid JSON."},
-                            {"role": "user", "content": prompt}
+                            {
+                                "role": "system",
+                                "content": "You are an IoT data semantics expert. Respond only with valid JSON.",
+                            },
+                            {"role": "user", "content": prompt},
                         ],
                         temperature=self.config.llm_temperature,
-                        max_tokens=self.config.llm_max_tokens
+                        max_tokens=self.config.llm_max_tokens,
                     )
                     return response.choices[0].message.content
                 except Exception as e:
-                    logger.warning(
-                        "LLM call failed",
-                        attempt=attempt + 1,
-                        error=str(e)
-                    )
+                    logger.warning("LLM call failed", attempt=attempt + 1, error=str(e))
                     if attempt == self.config.max_llm_retries - 1:
                         raise
 
         # Fallback: rule-based translation
         return self._rule_based_fallback(prompt)
 
-    def _rule_based_fallback(self, prompt: str) -> str:
+    def _rule_based_fallback(self, _prompt: str) -> str:
         """Simple rule-based fallback when LLM is unavailable."""
         # This is a simplified fallback that uses the inferred semantics
         # In production, you'd want a more sophisticated rule engine
-        return json.dumps({
-            "mappings": [],
-            "device_context": "unknown",
-            "suggested_new_concepts": []
-        })
+        return json.dumps(
+            {"mappings": [], "device_context": "unknown", "suggested_new_concepts": []}
+        )
 
 
 # ============================================================================
 # Semantic Translator
 # ============================================================================
+
 
 class SemanticTranslator:
     """
@@ -526,10 +520,10 @@ class SemanticTranslator:
 
     def __init__(
         self,
-        config: Optional[SemanticTranslatorConfig] = None,
+        config: SemanticTranslatorConfig | None = None,
         openai_client=None,
         weaviate_client=None,
-        ontology_registry=None
+        ontology_registry=None,
     ):
         self.config = config or SemanticTranslatorConfig()
         self.openai = openai_client
@@ -539,13 +533,10 @@ class SemanticTranslator:
             embedding_model=self.config.embedding_model,
             threshold=self.config.embedding_threshold,
             weaviate_client=weaviate_client,
-            openai_client=openai_client
+            openai_client=openai_client,
         )
 
-        self.llm_translator = LLMTranslator(
-            config=self.config,
-            openai_client=openai_client
-        )
+        self.llm_translator = LLMTranslator(config=self.config, openai_client=openai_client)
 
     async def translate_schema(self, schema: ExtractedSchema) -> SemanticMapping:
         """
@@ -554,14 +545,11 @@ class SemanticTranslator:
         """
         # Check cache first
         if schema.cached_mapping:
-            logger.info(
-                "Using cached mapping",
-                signature=schema.schema_signature
-            )
+            logger.info("Using cached mapping", signature=schema.schema_signature)
             return self._apply_cached_mapping(schema, schema.cached_mapping)
 
-        mappings: List[FieldMapping] = []
-        fields_needing_llm: List[ExtractedField] = []
+        mappings: list[FieldMapping] = []
+        fields_needing_llm: list[ExtractedField] = []
 
         # Try embedding resolution for each field
         for field in schema.fields:
@@ -572,7 +560,10 @@ class SemanticTranslator:
 
             embedding_result = await self.embedding_resolver.resolve(field)
 
-            if embedding_result and embedding_result.confidence >= self.config.min_confidence_threshold:
+            if (
+                embedding_result
+                and embedding_result.confidence >= self.config.min_confidence_threshold
+            ):
                 mappings.append(embedding_result)
             else:
                 fields_needing_llm.append(field)
@@ -580,8 +571,9 @@ class SemanticTranslator:
         # Call LLM for unresolved fields
         device_context = None
         if fields_needing_llm:
-            llm_mappings, device_context, suggested_concepts = \
-                await self.llm_translator.translate(schema, fields_needing_llm)
+            llm_mappings, device_context, suggested_concepts = await self.llm_translator.translate(
+                schema, fields_needing_llm
+            )
 
             mappings.extend(llm_mappings)
 
@@ -597,9 +589,7 @@ class SemanticTranslator:
                 validated_mappings.append(mapping)
             else:
                 logger.warning("Invalid mapping rejected", source_field=mapping.source_field)
-                validated_mappings.append(
-                    self._create_fallback_mapping(mapping.source_field)
-                )
+                validated_mappings.append(self._create_fallback_mapping(mapping.source_field))
 
         # Compute overall confidence
         overall_confidence = self._compute_overall_confidence(validated_mappings)
@@ -612,7 +602,7 @@ class SemanticTranslator:
             device_context=device_context,
             confidence=overall_confidence,
             llm_generated=len(fields_needing_llm) > 0,
-            translated_at=datetime.utcnow()
+            translated_at=datetime.utcnow(),
         )
 
         logger.info(
@@ -620,15 +610,13 @@ class SemanticTranslator:
             message_id=schema.message_id,
             mappings=len(validated_mappings),
             llm_used=result.llm_generated,
-            confidence=overall_confidence
+            confidence=overall_confidence,
         )
 
         return result
 
     def _apply_cached_mapping(
-        self,
-        schema: ExtractedSchema,
-        cached: 'CachedMapping'
+        self, schema: ExtractedSchema, cached: CachedMapping
     ) -> SemanticMapping:
         """Apply a cached mapping to a schema."""
         return SemanticMapping(
@@ -639,7 +627,7 @@ class SemanticTranslator:
             device_context=None,
             confidence=cached.confidence,
             llm_generated=False,
-            translated_at=datetime.utcnow()
+            translated_at=datetime.utcnow(),
         )
 
     def _create_passthrough_mapping(self, field: ExtractedField) -> FieldMapping:
@@ -652,7 +640,7 @@ class SemanticTranslator:
             target_unit=field.inferred_unit,
             conversion_formula=None,
             confidence=1.0,
-            resolution_method=ResolutionMethod.PASSTHROUGH
+            resolution_method=ResolutionMethod.PASSTHROUGH,
         )
 
     def _create_fallback_mapping(self, source_field: str) -> FieldMapping:
@@ -665,7 +653,7 @@ class SemanticTranslator:
             target_unit=None,
             conversion_formula=None,
             confidence=0.0,
-            resolution_method=ResolutionMethod.PASSTHROUGH
+            resolution_method=ResolutionMethod.PASSTHROUGH,
         )
 
     def _validate_mapping(self, mapping: FieldMapping) -> bool:
@@ -680,16 +668,13 @@ class SemanticTranslator:
         # Ontology validation if available
         if self.ontology_registry:
             concept = self.ontology_registry.get_concept(mapping.target_concept)
-            if concept is None and not mapping.target_concept.startswith('_'):
-                logger.warning(
-                    "Unknown target concept",
-                    concept=mapping.target_concept
-                )
+            if concept is None and not mapping.target_concept.startswith("_"):
+                logger.warning("Unknown target concept", concept=mapping.target_concept)
                 # Allow it but log warning
 
         return True
 
-    def _compute_overall_confidence(self, mappings: List[FieldMapping]) -> float:
+    def _compute_overall_confidence(self, mappings: list[FieldMapping]) -> float:
         """Compute overall confidence from individual mappings."""
         if not mappings:
             return 0.0
@@ -722,7 +707,5 @@ class SemanticTranslator:
                 logger.info("Learned new concept", concept_id=concept.concept_id)
             except Exception as e:
                 logger.warning(
-                    "Failed to learn concept",
-                    concept_id=concept.concept_id,
-                    error=str(e)
+                    "Failed to learn concept", concept_id=concept.concept_id, error=str(e)
                 )

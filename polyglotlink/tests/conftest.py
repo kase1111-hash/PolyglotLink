@@ -3,9 +3,10 @@ Pytest configuration and shared fixtures.
 """
 
 import json
-import pytest
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any
+
+import pytest
 
 from polyglotlink.models.schemas import (
     ExtractedField,
@@ -22,31 +23,29 @@ from polyglotlink.models.schemas import (
 @pytest.fixture
 def sample_json_payload() -> bytes:
     """Sample JSON payload for testing."""
-    return json.dumps({
-        "temperature": 23.5,
-        "humidity": 65,
-        "pressure": 1013.25,
-        "device_id": "sensor-001",
-        "timestamp": "2024-01-15T10:30:00Z"
-    }).encode()
+    return json.dumps(
+        {
+            "temperature": 23.5,
+            "humidity": 65,
+            "pressure": 1013.25,
+            "device_id": "sensor-001",
+            "timestamp": "2024-01-15T10:30:00Z",
+        }
+    ).encode()
 
 
 @pytest.fixture
 def sample_nested_payload() -> bytes:
     """Sample nested JSON payload for testing."""
-    return json.dumps({
-        "sensor": {
-            "readings": {
-                "temperature": 23.5,
-                "humidity": 65
+    return json.dumps(
+        {
+            "sensor": {
+                "readings": {"temperature": 23.5, "humidity": 65},
+                "metadata": {"location": "room-a", "floor": 1},
             },
-            "metadata": {
-                "location": "room-a",
-                "floor": 1
-            }
-        },
-        "device_id": "sensor-001"
-    }).encode()
+            "device_id": "sensor-001",
+        }
+    ).encode()
 
 
 @pytest.fixture
@@ -60,7 +59,7 @@ def sample_raw_message(sample_json_payload) -> RawMessage:
         payload_raw=sample_json_payload,
         payload_encoding=PayloadEncoding.JSON,
         timestamp=datetime.utcnow(),
-        metadata={"broker": "localhost"}
+        metadata={"broker": "localhost"},
     )
 
 
@@ -124,7 +123,7 @@ def sample_extracted_schema(sample_extracted_fields) -> ExtractedSchema:
             "temperature": 23.5,
             "humidity": 65,
             "device_id": "sensor-001",
-            "timestamp": "2024-01-15T10:30:00Z"
+            "timestamp": "2024-01-15T10:30:00Z",
         },
         extracted_at=datetime.utcnow(),
     )
@@ -187,7 +186,7 @@ def sample_semantic_mapping(sample_field_mappings) -> SemanticMapping:
 
 
 @pytest.fixture
-def iot_payloads() -> Dict[str, Dict[str, Any]]:
+def iot_payloads() -> dict[str, dict[str, Any]]:
     """Collection of various IoT device payloads for testing."""
     return {
         "environmental_sensor": {
@@ -196,14 +195,14 @@ def iot_payloads() -> Dict[str, Dict[str, Any]]:
             "pressure_hpa": 1013.25,
             "co2_ppm": 450,
             "device_id": "env-001",
-            "ts": 1705312200
+            "ts": 1705312200,
         },
         "power_meter": {
             "voltage_v": 230.5,
             "current_a": 2.3,
             "power_w": 530.15,
             "energy_kwh": 1234.5,
-            "device": "meter-001"
+            "device": "meter-001",
         },
         "gps_tracker": {
             "lat": 40.7128,
@@ -211,15 +210,15 @@ def iot_payloads() -> Dict[str, Dict[str, Any]]:
             "alt_m": 10.5,
             "speed_kmh": 45.2,
             "heading": 180,
-            "timestamp": "2024-01-15T10:30:00Z"
+            "timestamp": "2024-01-15T10:30:00Z",
         },
         "industrial_plc": {
             "registers": [100, 200, 300],
             "status": 1,
             "alarm": False,
             "setpoint": 75.0,
-            "process_value": 74.5
-        }
+            "process_value": 74.5,
+        },
     }
 
 
@@ -228,6 +227,7 @@ def iot_payloads() -> Dict[str, Dict[str, Any]]:
 def event_loop():
     """Create event loop for async tests."""
     import asyncio
+
     loop = asyncio.new_event_loop()
     yield loop
     loop.close()

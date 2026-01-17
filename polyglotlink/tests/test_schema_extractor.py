@@ -3,8 +3,9 @@ Unit tests for the Schema Extractor module.
 """
 
 import json
-import pytest
 from datetime import datetime
+
+import pytest
 
 from polyglotlink.models.schemas import (
     PayloadEncoding,
@@ -12,8 +13,8 @@ from polyglotlink.models.schemas import (
     RawMessage,
 )
 from polyglotlink.modules.schema_extractor import (
-    SchemaExtractor,
     SchemaCache,
+    SchemaExtractor,
     detect_type,
     flatten_dict,
     generate_schema_hash,
@@ -78,18 +79,12 @@ class TestFlattenDict:
         assert result == {"a.b.c": 1}
 
     def test_mixed_nesting(self):
-        data = {
-            "sensor": {
-                "temperature": 23.5,
-                "humidity": 65
-            },
-            "device_id": "sensor-01"
-        }
+        data = {"sensor": {"temperature": 23.5, "humidity": 65}, "device_id": "sensor-01"}
         result = flatten_dict(data)
         assert result == {
             "sensor.temperature": 23.5,
             "sensor.humidity": 65,
-            "device_id": "sensor-01"
+            "device_id": "sensor-01",
         }
 
     def test_array_of_primitives(self):
@@ -98,12 +93,7 @@ class TestFlattenDict:
         assert result == {"values": [1, 2, 3]}
 
     def test_array_of_objects(self):
-        data = {
-            "sensors": [
-                {"id": 1, "value": 10},
-                {"id": 2, "value": 20}
-            ]
-        }
+        data = {"sensors": [{"id": 1, "value": 10}, {"id": 2, "value": 20}]}
         result = flatten_dict(data)
         assert "sensors[0].id" in result
         assert "sensors[0].value" in result
@@ -177,7 +167,9 @@ class TestInferSemanticHint:
     def test_timestamp(self):
         # Note: "timestamp" field name infers as "current", "datetime" infers as "timestamp"
         assert infer_semantic_hint("datetime", "2024-01-15") == "timestamp"
-        assert infer_semantic_hint("created_at", "2024-01-15") is not None or True  # May return None
+        assert (
+            infer_semantic_hint("created_at", "2024-01-15") is not None or True
+        )  # May return None
 
     def test_identifier(self):
         assert infer_semantic_hint("device_id", "abc123") == "identifier"
@@ -255,12 +247,40 @@ class TestSchemaHash:
         from polyglotlink.models.schemas import ExtractedField
 
         fields1 = [
-            ExtractedField(key="a", original_key="a", value=1, value_type="integer", is_timestamp=False, is_identifier=False),
-            ExtractedField(key="b", original_key="b", value=2, value_type="integer", is_timestamp=False, is_identifier=False),
+            ExtractedField(
+                key="a",
+                original_key="a",
+                value=1,
+                value_type="integer",
+                is_timestamp=False,
+                is_identifier=False,
+            ),
+            ExtractedField(
+                key="b",
+                original_key="b",
+                value=2,
+                value_type="integer",
+                is_timestamp=False,
+                is_identifier=False,
+            ),
         ]
         fields2 = [
-            ExtractedField(key="b", original_key="b", value=2, value_type="integer", is_timestamp=False, is_identifier=False),
-            ExtractedField(key="a", original_key="a", value=1, value_type="integer", is_timestamp=False, is_identifier=False),
+            ExtractedField(
+                key="b",
+                original_key="b",
+                value=2,
+                value_type="integer",
+                is_timestamp=False,
+                is_identifier=False,
+            ),
+            ExtractedField(
+                key="a",
+                original_key="a",
+                value=1,
+                value_type="integer",
+                is_timestamp=False,
+                is_identifier=False,
+            ),
         ]
 
         assert generate_schema_hash(fields1) == generate_schema_hash(fields2)
@@ -269,11 +289,32 @@ class TestSchemaHash:
         from polyglotlink.models.schemas import ExtractedField
 
         fields_with_ts = [
-            ExtractedField(key="temp", original_key="temp", value=23.5, value_type="float", is_timestamp=False, is_identifier=False),
-            ExtractedField(key="ts", original_key="ts", value=123456, value_type="integer", is_timestamp=True, is_identifier=False),
+            ExtractedField(
+                key="temp",
+                original_key="temp",
+                value=23.5,
+                value_type="float",
+                is_timestamp=False,
+                is_identifier=False,
+            ),
+            ExtractedField(
+                key="ts",
+                original_key="ts",
+                value=123456,
+                value_type="integer",
+                is_timestamp=True,
+                is_identifier=False,
+            ),
         ]
         fields_without_ts = [
-            ExtractedField(key="temp", original_key="temp", value=23.5, value_type="float", is_timestamp=False, is_identifier=False),
+            ExtractedField(
+                key="temp",
+                original_key="temp",
+                value=23.5,
+                value_type="float",
+                is_timestamp=False,
+                is_identifier=False,
+            ),
         ]
 
         assert generate_schema_hash(fields_with_ts) == generate_schema_hash(fields_without_ts)
@@ -316,11 +357,9 @@ class TestSchemaExtractor:
         return SchemaExtractor()
 
     def test_extract_simple_json(self, extractor):
-        payload = json.dumps({
-            "temperature": 23.5,
-            "humidity": 65,
-            "device_id": "sensor-01"
-        }).encode()
+        payload = json.dumps(
+            {"temperature": 23.5, "humidity": 65, "device_id": "sensor-01"}
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -340,15 +379,12 @@ class TestSchemaExtractor:
         assert schema.schema_signature is not None
 
     def test_extract_nested_json(self, extractor):
-        payload = json.dumps({
-            "sensor": {
-                "temperature": 23.5,
-                "humidity": 65
-            },
-            "meta": {
-                "timestamp": "2024-01-15T10:30:00Z"
+        payload = json.dumps(
+            {
+                "sensor": {"temperature": 23.5, "humidity": 65},
+                "meta": {"timestamp": "2024-01-15T10:30:00Z"},
             }
-        }).encode()
+        ).encode()
 
         raw = RawMessage(
             message_id="test-002",
@@ -368,10 +404,7 @@ class TestSchemaExtractor:
         assert "meta.timestamp" in field_keys
 
     def test_infers_units(self, extractor):
-        payload = json.dumps({
-            "temperature_c": 23.5,
-            "pressure_hpa": 1013.25
-        }).encode()
+        payload = json.dumps({"temperature_c": 23.5, "pressure_hpa": 1013.25}).encode()
 
         raw = RawMessage(
             message_id="test-003",
@@ -392,10 +425,7 @@ class TestSchemaExtractor:
         assert pressure_field.inferred_unit == "hectopascal"
 
     def test_detects_timestamps(self, extractor):
-        payload = json.dumps({
-            "value": 42,
-            "timestamp": "2024-01-15T10:30:00Z"
-        }).encode()
+        payload = json.dumps({"value": 42, "timestamp": "2024-01-15T10:30:00Z"}).encode()
 
         raw = RawMessage(
             message_id="test-004",
@@ -413,10 +443,9 @@ class TestSchemaExtractor:
         assert ts_field.is_timestamp is True
 
     def test_detects_identifiers(self, extractor):
-        payload = json.dumps({
-            "device_id": "sensor-01",
-            "uuid": "550e8400-e29b-41d4-a716-446655440000"
-        }).encode()
+        payload = json.dumps(
+            {"device_id": "sensor-01", "uuid": "550e8400-e29b-41d4-a716-446655440000"}
+        ).encode()
 
         raw = RawMessage(
             message_id="test-005",

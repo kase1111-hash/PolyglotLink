@@ -17,11 +17,11 @@ Usage:
         --html=load_test_report.html
 """
 
-import json
 import random
 import time
-from locust import HttpUser, task, between, events
 from datetime import datetime
+
+from locust import HttpUser, between, events, task
 
 
 class IoTDevicePayloads:
@@ -36,7 +36,7 @@ class IoTDevicePayloads:
             "co2_ppm": random.randint(300, 800),
             "voc_index": random.randint(0, 500),
             "device_id": f"env-sensor-{random.randint(1, 1000):04d}",
-            "timestamp": datetime.utcnow().isoformat() + "Z"
+            "timestamp": datetime.utcnow().isoformat() + "Z",
         }
 
     @staticmethod
@@ -49,7 +49,7 @@ class IoTDevicePayloads:
             "power_factor": round(random.uniform(0.8, 1.0), 3),
             "frequency_hz": round(random.uniform(49.5, 50.5), 2),
             "device_id": f"meter-{random.randint(1, 500):04d}",
-            "ts": int(time.time() * 1000)
+            "ts": int(time.time() * 1000),
         }
 
     @staticmethod
@@ -63,7 +63,7 @@ class IoTDevicePayloads:
             "accuracy": round(random.uniform(1.0, 50.0), 1),
             "satellites": random.randint(4, 12),
             "device_id": f"tracker-{random.randint(1, 2000):04d}",
-            "timestamp": datetime.utcnow().isoformat() + "Z"
+            "timestamp": datetime.utcnow().isoformat() + "Z",
         }
 
     @staticmethod
@@ -76,7 +76,7 @@ class IoTDevicePayloads:
             "process_value": round(random.uniform(0, 100), 1),
             "error_code": random.choice([0, 0, 0, 0, 1, 2, 3]),
             "plc_id": f"plc-{random.randint(1, 100):03d}",
-            "cycle_time_ms": random.randint(10, 100)
+            "cycle_time_ms": random.randint(10, 100),
         }
 
     @staticmethod
@@ -85,17 +85,17 @@ class IoTDevicePayloads:
             "device": {
                 "id": f"complex-{random.randint(1, 500):04d}",
                 "type": random.choice(["environmental", "industrial", "smart_home"]),
-                "firmware": f"{random.randint(1, 5)}.{random.randint(0, 9)}.{random.randint(0, 20)}"
+                "firmware": f"{random.randint(1, 5)}.{random.randint(0, 9)}.{random.randint(0, 20)}",
             },
             "readings": {
                 "temperature": {"value": round(random.uniform(15.0, 35.0), 2), "unit": "celsius"},
                 "humidity": {"value": random.randint(30, 90), "unit": "percent"},
-                "pressure": {"value": round(random.uniform(980.0, 1050.0), 2), "unit": "hpa"}
+                "pressure": {"value": round(random.uniform(980.0, 1050.0), 2), "unit": "hpa"},
             },
             "meta": {
                 "timestamp": datetime.utcnow().isoformat() + "Z",
-                "sequence": random.randint(1, 1000000)
-            }
+                "sequence": random.randint(1, 1000000),
+            },
         }
 
 
@@ -116,7 +116,7 @@ class PolyglotLinkUser(HttpUser):
             "/ingest/mqtt",
             json=payload,
             headers={"Content-Type": "application/json"},
-            name="/ingest/mqtt [environmental]"
+            name="/ingest/mqtt [environmental]",
         )
 
     @task(20)
@@ -127,7 +127,7 @@ class PolyglotLinkUser(HttpUser):
             "/ingest/mqtt",
             json=payload,
             headers={"Content-Type": "application/json"},
-            name="/ingest/mqtt [power_meter]"
+            name="/ingest/mqtt [power_meter]",
         )
 
     @task(15)
@@ -138,7 +138,7 @@ class PolyglotLinkUser(HttpUser):
             "/ingest/mqtt",
             json=payload,
             headers={"Content-Type": "application/json"},
-            name="/ingest/mqtt [gps_tracker]"
+            name="/ingest/mqtt [gps_tracker]",
         )
 
     @task(10)
@@ -149,7 +149,7 @@ class PolyglotLinkUser(HttpUser):
             "/ingest/http",
             json=payload,
             headers={"Content-Type": "application/json"},
-            name="/ingest/http [plc]"
+            name="/ingest/http [plc]",
         )
 
     @task(10)
@@ -160,7 +160,7 @@ class PolyglotLinkUser(HttpUser):
             "/ingest/mqtt",
             json=payload,
             headers={"Content-Type": "application/json"},
-            name="/ingest/mqtt [nested]"
+            name="/ingest/mqtt [nested]",
         )
 
     @task(5)
@@ -181,7 +181,7 @@ class PolyglotLinkUser(HttpUser):
             "/ingest/batch",
             json=batch,
             headers={"Content-Type": "application/json"},
-            name="/ingest/batch [10 messages]"
+            name="/ingest/batch [10 messages]",
         )
 
 
@@ -201,7 +201,7 @@ class HighThroughputUser(HttpUser):
             "/ingest/mqtt",
             json=payload,
             headers={"Content-Type": "application/json"},
-            name="/ingest/mqtt [stress]"
+            name="/ingest/mqtt [stress]",
         )
 
 
@@ -218,7 +218,7 @@ class LargePayloadUser(HttpUser):
                 "value": round(random.uniform(0, 100), 2),
                 "unit": random.choice(["celsius", "percent", "ppm", "hpa"]),
                 "quality": random.choice(["good", "warning", "error"]),
-                "timestamp": datetime.utcnow().isoformat() + "Z"
+                "timestamp": datetime.utcnow().isoformat() + "Z",
             }
             for i in range(100)
         }
@@ -228,20 +228,20 @@ class LargePayloadUser(HttpUser):
             "/ingest/mqtt",
             json=payload,
             headers={"Content-Type": "application/json"},
-            name="/ingest/mqtt [large_payload]"
+            name="/ingest/mqtt [large_payload]",
         )
 
 
 # Event hooks for custom metrics
 @events.request.add_listener
-def on_request(request_type, name, response_time, response_length, exception, **kwargs):
+def on_request(_request_type, name, _response_time, _response_length, exception, **_kwargs):
     """Log request details for analysis."""
     if exception:
         print(f"Request failed: {name} - {exception}")
 
 
 @events.test_start.add_listener
-def on_test_start(environment, **kwargs):
+def on_test_start(environment, **_kwargs):
     """Called when load test starts."""
     print("=" * 60)
     print("PolyglotLink Load Test Starting")
@@ -250,7 +250,7 @@ def on_test_start(environment, **kwargs):
 
 
 @events.test_stop.add_listener
-def on_test_stop(environment, **kwargs):
+def on_test_stop(_environment, **_kwargs):
     """Called when load test stops."""
     print("=" * 60)
     print("PolyglotLink Load Test Complete")

@@ -5,9 +5,7 @@ Centralized configuration management with validation using Pydantic Settings.
 Loads configuration from environment variables and .env files.
 """
 
-import os
 from functools import lru_cache
-from typing import List, Optional
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,10 +16,10 @@ class LLMSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="LLM_")
 
-    openai_api_key: Optional[str] = Field(
+    openai_api_key: str | None = Field(
         default=None,
         validation_alias="OPENAI_API_KEY",
-        description="OpenAI API key for LLM and embeddings"
+        description="OpenAI API key for LLM and embeddings",
     )
     model: str = Field(default="gpt-4o", description="LLM model to use")
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
@@ -31,14 +29,10 @@ class LLMSettings(BaseSettings):
 
     # Embedding settings
     embedding_model: str = Field(
-        default="text-embedding-3-large",
-        validation_alias="EMBEDDING_MODEL"
+        default="text-embedding-3-large", validation_alias="EMBEDDING_MODEL"
     )
     embedding_threshold: float = Field(
-        default=0.85,
-        ge=0.0,
-        le=1.0,
-        validation_alias="EMBEDDING_THRESHOLD"
+        default=0.85, ge=0.0, le=1.0, validation_alias="EMBEDDING_THRESHOLD"
     )
 
 
@@ -51,13 +45,11 @@ class MQTTListenerSettings(BaseSettings):
     broker_host: str = Field(default="localhost")
     broker_port: int = Field(default=1883, ge=1, le=65535)
     client_id: str = Field(default="polyglotlink-listener")
-    username: Optional[str] = Field(default=None)
-    password: Optional[str] = Field(default=None)
+    username: str | None = Field(default=None)
+    password: str | None = Field(default=None)
     tls_enabled: bool = Field(default=False)
-    ca_cert: Optional[str] = Field(default=None)
-    topic_patterns: List[str] = Field(
-        default=["sensors/#", "devices/+/telemetry"]
-    )
+    ca_cert: str | None = Field(default=None)
+    topic_patterns: list[str] = Field(default=["sensors/#", "devices/+/telemetry"])
     qos: int = Field(default=1, ge=0, le=2)
 
     @field_validator("topic_patterns", mode="before")
@@ -120,7 +112,7 @@ class OPCUAListenerSettings(BaseSettings):
 
     enabled: bool = Field(default=False)
     endpoint_url: str = Field(default="opc.tcp://localhost:4840")
-    security_policy: Optional[str] = Field(default=None)
+    security_policy: str | None = Field(default=None)
     subscription_interval_ms: int = Field(default=1000, ge=100, le=60000)
 
 
@@ -197,7 +189,7 @@ class SentrySettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="SENTRY_")
 
-    dsn: Optional[str] = Field(default=None)
+    dsn: str | None = Field(default=None)
     environment: str = Field(default="development")
     traces_sample_rate: float = Field(default=0.1, ge=0.0, le=1.0)
 
@@ -258,7 +250,7 @@ class Settings(BaseSettings):
         return self.env == "development"
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     """
     Get cached application settings.

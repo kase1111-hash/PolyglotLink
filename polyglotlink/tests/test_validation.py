@@ -4,6 +4,7 @@ Unit tests for the Validation utilities module.
 
 import pytest
 
+from polyglotlink.utils.exceptions import ValidationError
 from polyglotlink.utils.validation import (
     detect_malicious_patterns,
     sanitize_dict_keys,
@@ -18,7 +19,6 @@ from polyglotlink.utils.validation import (
     validate_payload_size,
     validate_protocol,
 )
-from polyglotlink.utils.exceptions import ValidationError
 
 
 class TestSanitizeString:
@@ -240,6 +240,7 @@ class TestValidateNumber:
 
     def test_nan_allowed(self):
         import math
+
         result = validate_number(float("nan"), "value", allow_nan=True)
         assert math.isnan(result)
 
@@ -249,6 +250,7 @@ class TestValidateNumber:
 
     def test_inf_allowed(self):
         import math
+
         result = validate_number(float("inf"), "value", allow_inf=True)
         assert math.isinf(result)
 
@@ -318,10 +320,7 @@ class TestDetectMaliciousPatterns:
     def test_disable_specific_checks(self):
         # SQL check disabled, so SQL injection not detected
         result = detect_malicious_patterns(
-            "OR 1=1",
-            check_sql=False,
-            check_script=True,
-            check_path_traversal=True
+            "OR 1=1", check_sql=False, check_script=True, check_path_traversal=True
         )
         assert result is None
 

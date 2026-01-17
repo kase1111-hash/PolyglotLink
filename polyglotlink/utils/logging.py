@@ -9,32 +9,24 @@ import logging
 import sys
 from contextvars import ContextVar
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 import structlog
 from structlog.types import EventDict, Processor
 
 # Context variables for request-scoped logging
-request_id_var: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
-device_id_var: ContextVar[Optional[str]] = ContextVar("device_id", default=None)
-message_id_var: ContextVar[Optional[str]] = ContextVar("message_id", default=None)
+request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
+device_id_var: ContextVar[str | None] = ContextVar("device_id", default=None)
+message_id_var: ContextVar[str | None] = ContextVar("message_id", default=None)
 
 
-def add_timestamp(
-    logger: logging.Logger,
-    method_name: str,
-    event_dict: EventDict
-) -> EventDict:
+def add_timestamp(_logger: logging.Logger, _method_name: str, event_dict: EventDict) -> EventDict:
     """Add ISO format timestamp to log event."""
     event_dict["timestamp"] = datetime.utcnow().isoformat() + "Z"
     return event_dict
 
 
-def add_context(
-    logger: logging.Logger,
-    method_name: str,
-    event_dict: EventDict
-) -> EventDict:
+def add_context(_logger: logging.Logger, _method_name: str, event_dict: EventDict) -> EventDict:
     """Add context variables to log event."""
     request_id = request_id_var.get()
     device_id = device_id_var.get()
@@ -51,9 +43,7 @@ def add_context(
 
 
 def add_service_info(
-    logger: logging.Logger,
-    method_name: str,
-    event_dict: EventDict
+    _logger: logging.Logger, _method_name: str, event_dict: EventDict
 ) -> EventDict:
     """Add service information to log event."""
     event_dict["service"] = "polyglotlink"
@@ -61,9 +51,7 @@ def add_service_info(
 
 
 def format_exception(
-    logger: logging.Logger,
-    method_name: str,
-    event_dict: EventDict
+    _logger: logging.Logger, _method_name: str, event_dict: EventDict
 ) -> EventDict:
     """Format exception information if present."""
     exc_info = event_dict.pop("exc_info", None)
@@ -78,24 +66,28 @@ def format_exception(
                 event_dict["exception"]["details"] = exc_info.to_dict()
         elif exc_info is True:
             import traceback
-            event_dict["exception"] = {
-                "traceback": traceback.format_exc()
-            }
+
+            event_dict["exception"] = {"traceback": traceback.format_exc()}
     return event_dict
 
 
 def censor_sensitive_data(
-    logger: logging.Logger,
-    method_name: str,
-    event_dict: EventDict
+    _logger: logging.Logger, _method_name: str, event_dict: EventDict
 ) -> EventDict:
     """Censor sensitive data in logs."""
     sensitive_keys = {
-        "password", "api_key", "token", "secret", "authorization",
-        "apikey", "access_token", "refresh_token", "private_key"
+        "password",
+        "api_key",
+        "token",
+        "secret",
+        "authorization",
+        "apikey",
+        "access_token",
+        "refresh_token",
+        "private_key",
     }
 
-    def censor_dict(d: Dict[str, Any]) -> Dict[str, Any]:
+    def censor_dict(d: dict[str, Any]) -> dict[str, Any]:
         result = {}
         for key, value in d.items():
             key_lower = key.lower()
@@ -105,8 +97,7 @@ def censor_sensitive_data(
                 result[key] = censor_dict(value)
             elif isinstance(value, list):
                 result[key] = [
-                    censor_dict(item) if isinstance(item, dict) else item
-                    for item in value
+                    censor_dict(item) if isinstance(item, dict) else item for item in value
                 ]
             else:
                 result[key] = value
@@ -145,20 +136,16 @@ def configure_logging(
 
     if development:
         # Development: colored console output
-        processors = shared_processors + [
-            structlog.dev.ConsoleRenderer(colors=True)
-        ]
+        processors = shared_processors + [structlog.dev.ConsoleRenderer(colors=True)]
     elif json_logs:
         # Production: JSON output
         processors = shared_processors + [
             structlog.processors.format_exc_info,
-            structlog.processors.JSONRenderer()
+            structlog.processors.JSONRenderer(),
         ]
     else:
         # Plain text output
-        processors = shared_processors + [
-            structlog.dev.ConsoleRenderer(colors=False)
-        ]
+        processors = shared_processors + [structlog.dev.ConsoleRenderer(colors=False)]
 
     # Configure structlog
     structlog.configure(
@@ -183,7 +170,7 @@ def configure_logging(
     logging.getLogger("kafka").setLevel(logging.WARNING)
 
 
-def get_logger(name: Optional[str] = None) -> structlog.stdlib.BoundLogger:
+def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     """
     Get a logger instance.
 
@@ -207,9 +194,9 @@ class LogContext:
 
     def __init__(
         self,
-        request_id: Optional[str] = None,
-        device_id: Optional[str] = None,
-        message_id: Optional[str] = None,
+        request_id: str | None = None,
+        device_id: str | None = None,
+        message_id: str | None = None,
     ):
         self.request_id = request_id
         self.device_id = device_id
@@ -233,10 +220,7 @@ class LogContext:
 
 
 def log_performance(
-    logger: structlog.stdlib.BoundLogger,
-    operation: str,
-    start_time: datetime,
-    **extra: Any
+    logger: structlog.stdlib.BoundLogger, operation: str, start_time: datetime, **extra: Any
 ) -> None:
     """
     Log performance metrics for an operation.
@@ -249,10 +233,7 @@ def log_performance(
     """
     duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
     logger.info(
-        f"{operation} completed",
-        operation=operation,
-        duration_ms=round(duration_ms, 2),
-        **extra
+        f"{operation} completed", operation=operation, duration_ms=round(duration_ms, 2), **extra
     )
 
 
@@ -262,45 +243,25 @@ class MetricsLogger:
     Provides methods for logging common metric types.
     """
 
-    def __init__(self, logger: Optional[structlog.stdlib.BoundLogger] = None):
+    def __init__(self, logger: structlog.stdlib.BoundLogger | None = None):
         self.logger = logger or get_logger("metrics")
 
     def count(self, metric: str, value: int = 1, **tags: Any) -> None:
         """Log a count metric."""
-        self.logger.info(
-            "metric.count",
-            metric=metric,
-            value=value,
-            metric_type="counter",
-            **tags
-        )
+        self.logger.info("metric.count", metric=metric, value=value, metric_type="counter", **tags)
 
     def gauge(self, metric: str, value: float, **tags: Any) -> None:
         """Log a gauge metric."""
-        self.logger.info(
-            "metric.gauge",
-            metric=metric,
-            value=value,
-            metric_type="gauge",
-            **tags
-        )
+        self.logger.info("metric.gauge", metric=metric, value=value, metric_type="gauge", **tags)
 
     def histogram(self, metric: str, value: float, **tags: Any) -> None:
         """Log a histogram metric."""
         self.logger.info(
-            "metric.histogram",
-            metric=metric,
-            value=value,
-            metric_type="histogram",
-            **tags
+            "metric.histogram", metric=metric, value=value, metric_type="histogram", **tags
         )
 
     def timing(self, metric: str, duration_ms: float, **tags: Any) -> None:
         """Log a timing metric."""
         self.logger.info(
-            "metric.timing",
-            metric=metric,
-            duration_ms=duration_ms,
-            metric_type="timing",
-            **tags
+            "metric.timing", metric=metric, duration_ms=duration_ms, metric_type="timing", **tags
         )

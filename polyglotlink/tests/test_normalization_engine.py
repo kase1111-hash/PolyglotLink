@@ -2,8 +2,9 @@
 Unit tests for the Normalization Engine module.
 """
 
-import pytest
 from datetime import datetime
+
+import pytest
 
 from polyglotlink.models.schemas import (
     ExtractedField,
@@ -14,14 +15,13 @@ from polyglotlink.models.schemas import (
     SemanticMapping,
 )
 from polyglotlink.modules.normalization_engine import (
+    Concept,
     NormalizationEngine,
+    UnsafeFormulaError,
     apply_conversion,
     enforce_type,
     get_unit_conversion,
     validate_value,
-    Concept,
-    ConversionError,
-    UnsafeFormulaError,
 )
 
 

@@ -5,13 +5,14 @@ Main server application that orchestrates all components.
 """
 
 import asyncio
+import contextlib
 import signal
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from polyglotlink.utils.config import get_settings
-from polyglotlink.utils.error_logging import capture_errors, add_breadcrumb
-from polyglotlink.utils.logging import get_logger, LogContext, log_performance
+from polyglotlink.utils.error_logging import add_breadcrumb, capture_errors
+from polyglotlink.utils.logging import LogContext, get_logger, log_performance
 
 logger = get_logger(__name__)
 
@@ -54,8 +55,6 @@ class PolyglotLinkServer:
         logger.info("Starting PolyglotLink server")
         self._metrics["start_time"] = datetime.utcnow()
 
-        settings = get_settings()
-
         # Initialize components
         await self._init_schema_extractor()
         await self._init_semantic_translator()
@@ -86,10 +85,8 @@ class PolyglotLinkServer:
         # Cancel processing task
         if self._processing_task:
             self._processing_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._processing_task
-            except asyncio.CancelledError:
-                pass
 
         # Stop components in reverse order
         if self._protocol_listener:
@@ -107,10 +104,10 @@ class PolyglotLinkServer:
     async def _init_protocol_listener(self) -> None:
         """Initialize protocol listener."""
         from polyglotlink.models.schemas import (
-            ProtocolListenerConfig,
-            MQTTConfig,
-            HTTPConfig,
             CoAPConfig,
+            HTTPConfig,
+            MQTTConfig,
+            ProtocolListenerConfig,
             WebSocketConfig,
         )
         from polyglotlink.modules.protocol_listener import ProtocolListener
@@ -153,7 +150,7 @@ class PolyglotLinkServer:
 
     async def _init_schema_extractor(self) -> None:
         """Initialize schema extractor."""
-        from polyglotlink.modules.schema_extractor import SchemaExtractor, SchemaCache
+        from polyglotlink.modules.schema_extractor import SchemaCache, SchemaExtractor
 
         # TODO: Initialize Redis-backed cache if available
         cache = SchemaCache(ttl_days=30)
@@ -181,6 +178,7 @@ class PolyglotLinkServer:
         if settings.llm.openai_api_key:
             try:
                 from openai import AsyncOpenAI
+
                 openai_client = AsyncOpenAI(api_key=settings.llm.openai_api_key)
             except ImportError:
                 logger.warning("openai package not installed")
@@ -199,10 +197,10 @@ class PolyglotLinkServer:
     async def _init_output_broker(self) -> None:
         """Initialize output broker."""
         from polyglotlink.modules.output_broker import (
-            OutputBroker,
-            OutputBrokerConfig,
             KafkaOutputConfig,
             MQTTOutputConfig,
+            OutputBroker,
+            OutputBrokerConfig,
         )
 
         settings = get_settings()
@@ -301,7 +299,7 @@ class PolyglotLinkServer:
             device_id=raw_message.device_id,
         )
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """Get server metrics."""
         uptime = None
         if self._metrics["start_time"]:
@@ -316,7 +314,7 @@ class PolyglotLinkServer:
 
 def create_app():
     """Create FastAPI application for HTTP endpoints."""
-    from fastapi import FastAPI, Request
+    from fastapi import FastAPI
     from fastapi.responses import JSONResponse
 
     app = FastAPI(
@@ -351,10 +349,10 @@ def create_app():
 
 
 async def run_server(
-    host: str = "0.0.0.0",
-    port: int = 8080,
-    workers: int = 1,
-    reload: bool = False,
+    host: str = "0.0.0.0",  # noqa: ARG001
+    port: int = 8080,  # noqa: ARG001
+    workers: int = 1,  # noqa: ARG001
+    reload: bool = False,  # noqa: ARG001
     **kwargs,
 ) -> None:
     """Run the PolyglotLink server."""

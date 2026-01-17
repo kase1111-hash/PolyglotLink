@@ -1,4 +1,3 @@
-from datetime import datetime
 """
 Security Tests for PolyglotLink
 
@@ -10,9 +9,11 @@ These tests verify security controls for:
 - Access control and authorization
 """
 
+import contextlib
 import json
+from datetime import datetime
+
 import pytest
-from unittest.mock import MagicMock, patch
 
 from polyglotlink.models.schemas import (
     PayloadEncoding,
@@ -20,15 +21,14 @@ from polyglotlink.models.schemas import (
     RawMessage,
 )
 from polyglotlink.modules.schema_extractor import SchemaExtractor
+from polyglotlink.utils.config import Settings
 from polyglotlink.utils.validation import (
     detect_malicious_patterns,
-    sanitize_string,
-    sanitize_identifier,
-    sanitize_topic,
-    validate_json_payload,
     is_valid_topic,
+    sanitize_identifier,
+    sanitize_string,
+    validate_json_payload,
 )
-from polyglotlink.utils.config import Settings
 
 
 class TestInputSanitization:
@@ -83,7 +83,7 @@ class TestInputSanitization:
             ("device'OR'1", "deviceOR1"),  # Quotes removed
         ]
 
-        for input_str, expected_pattern in test_cases:
+        for input_str, _expected_pattern in test_cases:
             sanitized = sanitize_identifier(input_str)
             # Should only contain alphanumeric, dash, underscore
             assert all(c.isalnum() or c in "-_" for c in sanitized)
@@ -137,9 +137,9 @@ class TestJsonPayloadSecurity:
             b"{not valid json}",
             b'{"unclosed": "string',
             b'{"array": [1, 2, 3}',
-            b'null',  # Valid but potentially unexpected
-            b'',  # Empty
-            b'\x00\x01\x02',  # Binary garbage
+            b"null",  # Valid but potentially unexpected
+            b"",  # Empty
+            b"\x00\x01\x02",  # Binary garbage
         ]
 
         for payload in malformed_payloads:
@@ -159,11 +159,13 @@ class TestSchemaExtractionSecurity:
 
     def test_handles_malicious_field_names(self, extractor):
         """Field names with injection attempts should be handled safely."""
-        payload = json.dumps({
-            "<script>alert('xss')</script>": 123,
-            "'; DROP TABLE --": 456,
-            "../../../etc/passwd": 789,
-        }).encode()
+        payload = json.dumps(
+            {
+                "<script>alert('xss')</script>": 123,
+                "'; DROP TABLE --": 456,
+                "../../../etc/passwd": 789,
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -183,11 +185,13 @@ class TestSchemaExtractionSecurity:
 
     def test_handles_unicode_exploits(self, extractor):
         """Unicode-based exploits should be handled."""
-        payload = json.dumps({
-            "normal": 123,
-            "\u202e\u0065\u006c\u0069\u0066": 456,  # Right-to-left override
-            "\u0000null_byte": 789,  # Null byte
-        }).encode()
+        payload = json.dumps(
+            {
+                "normal": 123,
+                "\u202e\u0065\u006c\u0069\u0066": 456,  # Right-to-left override
+                "\u0000null_byte": 789,  # Null byte
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -205,11 +209,13 @@ class TestSchemaExtractionSecurity:
 
     def test_prototype_pollution_prevention(self, extractor):
         """Prototype pollution attempts should be blocked."""
-        payload = json.dumps({
-            "__proto__": {"isAdmin": True},
-            "constructor": {"prototype": {"isAdmin": True}},
-            "normal_field": 123,
-        }).encode()
+        payload = json.dumps(
+            {
+                "__proto__": {"isAdmin": True},
+                "constructor": {"prototype": {"isAdmin": True}},
+                "normal_field": 123,
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -246,12 +252,14 @@ class TestConfigurationSecurity:
     def test_rejects_invalid_environment(self):
         """Invalid environment names should be rejected."""
         from pydantic import ValidationError as PydanticValidationError
+
         with pytest.raises(PydanticValidationError):
             Settings(POLYGLOTLINK_ENV="production; rm -rf /")
 
     def test_rejects_invalid_log_level(self):
         """Invalid log levels should be rejected."""
         from pydantic import ValidationError as PydanticValidationError
+
         with pytest.raises(PydanticValidationError):
             Settings(LOG_LEVEL="EXEC_COMMAND")
 
@@ -289,10 +297,12 @@ class TestBufferOverflowPrevention:
 
     def test_handles_extremely_long_strings(self, extractor):
         """Extremely long strings should be handled safely."""
-        payload = json.dumps({
-            "long_value": "x" * 1_000_000,
-            "normal": 123,
-        }).encode()
+        payload = json.dumps(
+            {
+                "long_value": "x" * 1_000_000,
+                "normal": 123,
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -310,9 +320,7 @@ class TestBufferOverflowPrevention:
 
     def test_handles_many_fields(self, extractor):
         """Payloads with many fields should be handled safely."""
-        payload = json.dumps({
-            f"field_{i}": i for i in range(10000)
-        }).encode()
+        payload = json.dumps({f"field_{i}": i for i in range(10000)}).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -349,13 +357,12 @@ class TestFormulaExecutionSecurity:
 
         for formula in dangerous_formulas:
             # These should be rejected or fail safely
-            try:
+            with contextlib.suppress(Exception):
                 # Attempt to use the formula - should be blocked
                 # The actual method depends on implementation
-                result = engine._safe_eval(formula, 100) if hasattr(engine, '_safe_eval') else None
+                if hasattr(engine, "_safe_eval"):
+                    engine._safe_eval(formula, 100)
                 # If it returns, it should not have executed dangerous code
-            except Exception:
-                pass  # Expected to fail
 
     def test_allows_safe_math_formulas(self):
         """Safe mathematical formulas should work."""
@@ -370,7 +377,7 @@ class TestFormulaExecutionSecurity:
         ]
 
         for formula, input_val, expected in safe_formulas:
-            if hasattr(engine, '_safe_eval'):
+            if hasattr(engine, "_safe_eval"):
                 result = engine._safe_eval(formula, input_val)
                 assert abs(result - expected) < 0.01
 
@@ -389,7 +396,7 @@ class TestAccessControlSecurity:
 
     def test_rate_limiting_configuration(self):
         """Rate limiting should be configurable."""
-        settings = Settings()
+        _settings = Settings()
 
         # Rate limiting should have reasonable defaults
         # Actual implementation may vary
@@ -409,7 +416,7 @@ class TestDataProtection:
         ]
 
         # These should be flagged or masked in logs
-        for pattern in pii_patterns:
+        for _pattern in pii_patterns:
             # Actual implementation would check logging behavior
             pass
 
@@ -427,4 +434,7 @@ class TestDataProtection:
 
         for field_name in sensitive_field_names:
             # These field names should trigger special handling
-            assert any(kw in field_name.lower() for kw in ["pass", "key", "secret", "token", "card", "ssn", "auth"])
+            assert any(
+                kw in field_name.lower()
+                for kw in ["pass", "key", "secret", "token", "card", "ssn", "auth"]
+            )

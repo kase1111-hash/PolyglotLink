@@ -10,7 +10,6 @@ import json
 import os
 from abc import ABC, abstractmethod
 from functools import lru_cache
-from typing import Any, Dict, Optional
 
 from polyglotlink.utils.exceptions import ConfigurationError
 from polyglotlink.utils.logging import get_logger
@@ -22,12 +21,12 @@ class SecretsBackend(ABC):
     """Abstract base class for secrets backends."""
 
     @abstractmethod
-    def get_secret(self, key: str) -> Optional[str]:
+    def get_secret(self, key: str) -> str | None:
         """Retrieve a secret by key."""
         pass
 
     @abstractmethod
-    def get_secrets(self, prefix: str) -> Dict[str, str]:
+    def get_secrets(self, prefix: str) -> dict[str, str]:
         """Retrieve all secrets with a given prefix."""
         pass
 
@@ -45,7 +44,7 @@ class EnvironmentSecretsBackend(SecretsBackend):
     def __init__(self, prefix: str = "POLYGLOTLINK_"):
         self.prefix = prefix
 
-    def get_secret(self, key: str) -> Optional[str]:
+    def get_secret(self, key: str) -> str | None:
         """Get secret from environment variable."""
         # Try with prefix first
         value = os.environ.get(f"{self.prefix}{key}")
@@ -55,13 +54,11 @@ class EnvironmentSecretsBackend(SecretsBackend):
         # Try without prefix
         return os.environ.get(key)
 
-    def get_secrets(self, prefix: str) -> Dict[str, str]:
+    def get_secrets(self, prefix: str) -> dict[str, str]:
         """Get all environment variables with prefix."""
         full_prefix = f"{self.prefix}{prefix}"
         return {
-            k[len(full_prefix):]: v
-            for k, v in os.environ.items()
-            if k.startswith(full_prefix)
+            k[len(full_prefix) :]: v for k, v in os.environ.items() if k.startswith(full_prefix)
         }
 
 
@@ -80,7 +77,7 @@ class DotEnvSecretsBackend(SecretsBackend):
         self.env_file = env_file
         self.encrypted = encrypted
         self.encryption_key_env = encryption_key_env
-        self._secrets: Dict[str, str] = {}
+        self._secrets: dict[str, str] = {}
         self._loaded = False
 
     def _load(self) -> None:
@@ -108,10 +105,11 @@ class DotEnvSecretsBackend(SecretsBackend):
         """Load plain text .env file."""
         try:
             from dotenv import dotenv_values
+
             self._secrets = {k: v for k, v in dotenv_values(self.env_file).items() if v is not None}
         except ImportError:
             # Fallback: manual parsing
-            with open(self.env_file, "r") as f:
+            with open(self.env_file) as f:
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith("#") and "=" in line:
@@ -145,9 +143,7 @@ class DotEnvSecretsBackend(SecretsBackend):
         try:
             key = os.environ.get(self.encryption_key_env)
             if not key:
-                raise ConfigurationError(
-                    f"Encryption key not found in {self.encryption_key_env}"
-                )
+                raise ConfigurationError(f"Encryption key not found in {self.encryption_key_env}")
 
             result = subprocess.run(
                 ["age", "-d", "-i", "-", self.env_file],
@@ -167,17 +163,13 @@ class DotEnvSecretsBackend(SecretsBackend):
 
         raise ConfigurationError("No decryption tool available (sops or age)")
 
-    def get_secret(self, key: str) -> Optional[str]:
+    def get_secret(self, key: str) -> str | None:
         self._load()
         return self._secrets.get(key)
 
-    def get_secrets(self, prefix: str) -> Dict[str, str]:
+    def get_secrets(self, prefix: str) -> dict[str, str]:
         self._load()
-        return {
-            k[len(prefix):]: v
-            for k, v in self._secrets.items()
-            if k.startswith(prefix)
-        }
+        return {k[len(prefix) :]: v for k, v in self._secrets.items() if k.startswith(prefix)}
 
     def is_available(self) -> bool:
         return os.path.exists(self.env_file)
@@ -190,19 +182,20 @@ class AWSSecretsManagerBackend(SecretsBackend):
 
     def __init__(
         self,
-        region_name: Optional[str] = None,
+        region_name: str | None = None,
         secret_name: str = "polyglotlink/config",
     ):
         self.region_name = region_name or os.environ.get("AWS_REGION", "us-east-1")
         self.secret_name = secret_name
         self._client = None
-        self._secrets: Dict[str, str] = {}
+        self._secrets: dict[str, str] = {}
         self._loaded = False
 
     def _get_client(self):
         if self._client is None:
             try:
                 import boto3
+
                 self._client = boto3.client(
                     "secretsmanager",
                     region_name=self.region_name,
@@ -223,6 +216,7 @@ class AWSSecretsManagerBackend(SecretsBackend):
                 self._secrets = json.loads(response["SecretString"])
             else:
                 import base64
+
                 decoded = base64.b64decode(response["SecretBinary"])
                 self._secrets = json.loads(decoded)
 
@@ -234,24 +228,18 @@ class AWSSecretsManagerBackend(SecretsBackend):
             # Don't raise - allow fallback to other backends
             self._loaded = True
 
-    def get_secret(self, key: str) -> Optional[str]:
+    def get_secret(self, key: str) -> str | None:
         self._load()
         return self._secrets.get(key)
 
-    def get_secrets(self, prefix: str) -> Dict[str, str]:
+    def get_secrets(self, prefix: str) -> dict[str, str]:
         self._load()
-        return {
-            k[len(prefix):]: v
-            for k, v in self._secrets.items()
-            if k.startswith(prefix)
-        }
+        return {k[len(prefix) :]: v for k, v in self._secrets.items() if k.startswith(prefix)}
 
     def is_available(self) -> bool:
-        try:
-            import boto3
-            return True
-        except ImportError:
-            return False
+        import importlib.util
+
+        return importlib.util.find_spec("boto3") is not None
 
 
 class VaultSecretsBackend(SecretsBackend):
@@ -261,8 +249,8 @@ class VaultSecretsBackend(SecretsBackend):
 
     def __init__(
         self,
-        url: Optional[str] = None,
-        token: Optional[str] = None,
+        url: str | None = None,
+        token: str | None = None,
         mount_point: str = "secret",
         path: str = "polyglotlink/config",
     ):
@@ -271,13 +259,14 @@ class VaultSecretsBackend(SecretsBackend):
         self.mount_point = mount_point
         self.path = path
         self._client = None
-        self._secrets: Dict[str, str] = {}
+        self._secrets: dict[str, str] = {}
         self._loaded = False
 
     def _get_client(self):
         if self._client is None:
             try:
                 import hvac
+
                 self._client = hvac.Client(url=self.url, token=self.token)
             except ImportError:
                 raise ConfigurationError("hvac not installed for Vault support")
@@ -307,24 +296,18 @@ class VaultSecretsBackend(SecretsBackend):
             logger.error("Failed to load from Vault", error=str(e))
             self._loaded = True
 
-    def get_secret(self, key: str) -> Optional[str]:
+    def get_secret(self, key: str) -> str | None:
         self._load()
         return self._secrets.get(key)
 
-    def get_secrets(self, prefix: str) -> Dict[str, str]:
+    def get_secrets(self, prefix: str) -> dict[str, str]:
         self._load()
-        return {
-            k[len(prefix):]: v
-            for k, v in self._secrets.items()
-            if k.startswith(prefix)
-        }
+        return {k[len(prefix) :]: v for k, v in self._secrets.items() if k.startswith(prefix)}
 
     def is_available(self) -> bool:
-        try:
-            import hvac
-            return bool(self.token)
-        except ImportError:
-            return False
+        import importlib.util
+
+        return importlib.util.find_spec("hvac") is not None and bool(self.token)
 
 
 class SecretsManager:
@@ -332,7 +315,7 @@ class SecretsManager:
     Unified secrets manager that tries multiple backends in order.
     """
 
-    def __init__(self, backends: Optional[list[SecretsBackend]] = None):
+    def __init__(self, backends: list[SecretsBackend] | None = None):
         if backends is None:
             # Default backend order
             backends = [
@@ -354,9 +337,9 @@ class SecretsManager:
     def get_secret(
         self,
         key: str,
-        default: Optional[str] = None,
+        default: str | None = None,
         required: bool = False,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Get a secret from available backends.
 
@@ -386,7 +369,7 @@ class SecretsManager:
 
         return default
 
-    def get_secrets(self, prefix: str) -> Dict[str, str]:
+    def get_secrets(self, prefix: str) -> dict[str, str]:
         """
         Get all secrets with a prefix from all backends.
 
@@ -396,7 +379,7 @@ class SecretsManager:
         Returns:
             Merged dictionary of secrets
         """
-        result: Dict[str, str] = {}
+        result: dict[str, str] = {}
 
         # Go through backends in reverse order so higher priority backends
         # override lower priority ones
@@ -432,7 +415,7 @@ class SecretsManager:
         return value
 
 
-@lru_cache()
+@lru_cache
 def get_secrets_manager() -> SecretsManager:
     """Get the global secrets manager instance."""
     return SecretsManager()
@@ -440,9 +423,9 @@ def get_secrets_manager() -> SecretsManager:
 
 def get_secret(
     key: str,
-    default: Optional[str] = None,
+    default: str | None = None,
     required: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """
     Convenience function to get a secret.
 

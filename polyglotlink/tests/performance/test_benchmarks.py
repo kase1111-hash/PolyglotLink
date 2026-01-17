@@ -8,24 +8,25 @@ Run with: pytest polyglotlink/tests/performance/test_benchmarks.py -v
 """
 
 import json
-import time
-import pytest
 import statistics
+import time
 from datetime import datetime
+
+import pytest
 
 from polyglotlink.models.schemas import (
     PayloadEncoding,
     Protocol,
     RawMessage,
 )
-from polyglotlink.modules.schema_extractor import SchemaExtractor
-from polyglotlink.modules.semantic_translator_agent import SemanticTranslator
 from polyglotlink.modules.normalization_engine import NormalizationEngine
 from polyglotlink.modules.protocol_listener import (
     detect_encoding,
     extract_device_id,
     generate_uuid,
 )
+from polyglotlink.modules.schema_extractor import SchemaExtractor
+from polyglotlink.modules.semantic_translator_agent import SemanticTranslator
 
 
 class TestSchemaExtractorBenchmarks:
@@ -37,11 +38,9 @@ class TestSchemaExtractorBenchmarks:
 
     def test_simple_payload_extraction_speed(self, extractor):
         """Benchmark: Simple payload schema extraction."""
-        payload = json.dumps({
-            "temperature": 23.5,
-            "humidity": 65,
-            "device_id": "sensor-001"
-        }).encode()
+        payload = json.dumps(
+            {"temperature": 23.5, "humidity": 65, "device_id": "sensor-001"}
+        ).encode()
 
         raw = RawMessage(
             message_id="bench-001",
@@ -75,7 +74,7 @@ class TestSchemaExtractorBenchmarks:
         print(f"  Average: {avg_time:.3f} ms")
         print(f"  P95: {p95_time:.3f} ms")
         print(f"  P99: {p99_time:.3f} ms")
-        print(f"  Throughput: {1000/avg_time:.0f} ops/sec")
+        print(f"  Throughput: {1000 / avg_time:.0f} ops/sec")
 
         # Performance assertions
         assert avg_time < 5.0, f"Average time {avg_time}ms exceeds 5ms threshold"
@@ -83,23 +82,21 @@ class TestSchemaExtractorBenchmarks:
 
     def test_nested_payload_extraction_speed(self, extractor):
         """Benchmark: Nested payload schema extraction."""
-        payload = json.dumps({
-            "device": {
-                "id": "sensor-001",
-                "type": "environmental",
-                "firmware": "1.2.3"
-            },
-            "readings": {
-                "temperature": {"value": 23.5, "unit": "celsius"},
-                "humidity": {"value": 65, "unit": "percent"},
-                "pressure": {"value": 1013.25, "unit": "hpa"}
-            },
-            "metadata": {
-                "timestamp": "2024-01-15T10:30:00Z",
-                "sequence": 12345,
-                "quality": "good"
+        payload = json.dumps(
+            {
+                "device": {"id": "sensor-001", "type": "environmental", "firmware": "1.2.3"},
+                "readings": {
+                    "temperature": {"value": 23.5, "unit": "celsius"},
+                    "humidity": {"value": 65, "unit": "percent"},
+                    "pressure": {"value": 1013.25, "unit": "hpa"},
+                },
+                "metadata": {
+                    "timestamp": "2024-01-15T10:30:00Z",
+                    "sequence": 12345,
+                    "quality": "good",
+                },
             }
-        }).encode()
+        ).encode()
 
         raw = RawMessage(
             message_id="bench-001",
@@ -127,15 +124,13 @@ class TestSchemaExtractorBenchmarks:
         print(f"\nNested Payload Extraction ({iterations} iterations):")
         print(f"  Average: {avg_time:.3f} ms")
         print(f"  P95: {p95_time:.3f} ms")
-        print(f"  Throughput: {1000/avg_time:.0f} ops/sec")
+        print(f"  Throughput: {1000 / avg_time:.0f} ops/sec")
 
         assert avg_time < 10.0, f"Average time {avg_time}ms exceeds 10ms threshold"
 
     def test_large_payload_extraction_speed(self, extractor):
         """Benchmark: Large payload with many fields."""
-        payload = json.dumps({
-            f"field_{i}": i * 1.5 for i in range(100)
-        }).encode()
+        payload = json.dumps({f"field_{i}": i * 1.5 for i in range(100)}).encode()
 
         raw = RawMessage(
             message_id="bench-001",
@@ -161,7 +156,7 @@ class TestSchemaExtractorBenchmarks:
 
         print(f"\nLarge Payload (100 fields) Extraction ({iterations} iterations):")
         print(f"  Average: {avg_time:.3f} ms")
-        print(f"  Throughput: {1000/avg_time:.0f} ops/sec")
+        print(f"  Throughput: {1000 / avg_time:.0f} ops/sec")
 
         assert avg_time < 50.0, f"Average time {avg_time}ms exceeds 50ms threshold"
 
@@ -171,10 +166,7 @@ class TestEncodingDetectionBenchmarks:
 
     def test_json_detection_speed(self):
         """Benchmark: JSON encoding detection."""
-        payloads = [
-            json.dumps({"key": f"value_{i}", "num": i}).encode()
-            for i in range(100)
-        ]
+        payloads = [json.dumps({"key": f"value_{i}", "num": i}).encode() for i in range(100)]
 
         iterations = 10000
         start = time.perf_counter()
@@ -187,15 +179,14 @@ class TestEncodingDetectionBenchmarks:
 
         print(f"\nJSON Detection ({iterations} iterations):")
         print(f"  Average: {avg_time:.2f} μs")
-        print(f"  Throughput: {iterations/elapsed:.0f} ops/sec")
+        print(f"  Throughput: {iterations / elapsed:.0f} ops/sec")
 
         assert avg_time < 100, f"Average time {avg_time}μs exceeds 100μs threshold"
 
     def test_xml_detection_speed(self):
         """Benchmark: XML encoding detection."""
         payloads = [
-            f"<root><value>{i}</value><name>test_{i}</name></root>".encode()
-            for i in range(100)
+            f"<root><value>{i}</value><name>test_{i}</name></root>".encode() for i in range(100)
         ]
 
         iterations = 10000
@@ -209,7 +200,7 @@ class TestEncodingDetectionBenchmarks:
 
         print(f"\nXML Detection ({iterations} iterations):")
         print(f"  Average: {avg_time:.2f} μs")
-        print(f"  Throughput: {iterations/elapsed:.0f} ops/sec")
+        print(f"  Throughput: {iterations / elapsed:.0f} ops/sec")
 
         assert avg_time < 100, f"Average time {avg_time}μs exceeds 100μs threshold"
 
@@ -219,10 +210,7 @@ class TestDeviceIdExtractionBenchmarks:
 
     def test_topic_parsing_speed(self):
         """Benchmark: Topic pattern parsing for device ID."""
-        topics = [
-            f"sensors/device-{i:04d}/telemetry"
-            for i in range(100)
-        ]
+        topics = [f"sensors/device-{i:04d}/telemetry" for i in range(100)]
 
         iterations = 50000
         start = time.perf_counter()
@@ -235,7 +223,7 @@ class TestDeviceIdExtractionBenchmarks:
 
         print(f"\nDevice ID Extraction ({iterations} iterations):")
         print(f"  Average: {avg_time:.2f} μs")
-        print(f"  Throughput: {iterations/elapsed:.0f} ops/sec")
+        print(f"  Throughput: {iterations / elapsed:.0f} ops/sec")
 
         assert avg_time < 50, f"Average time {avg_time}μs exceeds 50μs threshold"
 
@@ -256,7 +244,7 @@ class TestUuidGenerationBenchmarks:
 
         print(f"\nUUID Generation ({iterations} iterations):")
         print(f"  Average: {avg_time:.2f} μs")
-        print(f"  Throughput: {iterations/elapsed:.0f} ops/sec")
+        print(f"  Throughput: {iterations / elapsed:.0f} ops/sec")
 
         assert avg_time < 20, f"Average time {avg_time}μs exceeds 20μs threshold"
 
@@ -275,13 +263,15 @@ class TestNormalizationBenchmarks:
     @pytest.mark.asyncio
     async def test_full_pipeline_throughput(self, components):
         """Benchmark: Full pipeline throughput."""
-        payload = json.dumps({
-            "temperature": 23.5,
-            "humidity": 65,
-            "pressure_hpa": 1013.25,
-            "device_id": "sensor-001",
-            "timestamp": "2024-01-15T10:30:00Z"
-        }).encode()
+        payload = json.dumps(
+            {
+                "temperature": 23.5,
+                "humidity": 65,
+                "pressure_hpa": 1013.25,
+                "device_id": "sensor-001",
+                "timestamp": "2024-01-15T10:30:00Z",
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id="bench-001",
@@ -321,7 +311,7 @@ class TestNormalizationBenchmarks:
         print(f"\nFull Pipeline ({iterations} iterations):")
         print(f"  Average: {avg_time:.3f} ms")
         print(f"  P95: {p95_time:.3f} ms")
-        print(f"  Throughput: {1000/avg_time:.0f} msgs/sec")
+        print(f"  Throughput: {1000 / avg_time:.0f} msgs/sec")
 
         # Full pipeline should complete in reasonable time
         assert avg_time < 100.0, f"Average time {avg_time}ms exceeds 100ms threshold"
@@ -332,14 +322,11 @@ class TestMemoryEfficiency:
 
     def test_no_memory_leak_on_repeated_extraction(self):
         """Ensure no memory leak during repeated operations."""
-        import sys
 
         extractor = SchemaExtractor()
-        payload = json.dumps({
-            "temperature": 23.5,
-            "humidity": 65,
-            "device_id": "sensor-001"
-        }).encode()
+        payload = json.dumps(
+            {"temperature": 23.5, "humidity": 65, "device_id": "sensor-001"}
+        ).encode()
 
         raw = RawMessage(
             message_id="bench-001",
@@ -352,7 +339,7 @@ class TestMemoryEfficiency:
         )
 
         # Measure initial memory
-        initial_refs = len([o for o in dir() if not o.startswith('_')])
+        initial_refs = len([o for o in dir() if not o.startswith("_")])
 
         # Run many iterations
         for _ in range(1000):
@@ -360,7 +347,7 @@ class TestMemoryEfficiency:
             del schema
 
         # Memory should not grow significantly
-        final_refs = len([o for o in dir() if not o.startswith('_')])
+        final_refs = len([o for o in dir() if not o.startswith("_")])
 
         # Simple check - reference count shouldn't explode
         assert final_refs - initial_refs < 100, "Possible memory leak detected"
@@ -377,10 +364,7 @@ class TestConcurrencyBenchmarks:
         extractor = SchemaExtractor()
 
         payloads = [
-            json.dumps({
-                "temperature": 20 + i * 0.1,
-                "device_id": f"sensor-{i:04d}"
-            }).encode()
+            json.dumps({"temperature": 20 + i * 0.1, "device_id": f"sensor-{i:04d}"}).encode()
             for i in range(100)
         ]
 
@@ -407,7 +391,7 @@ class TestConcurrencyBenchmarks:
 
         print(f"\nConcurrent Extraction ({iterations} concurrent tasks):")
         print(f"  Total time: {elapsed:.3f} s")
-        print(f"  Throughput: {iterations/elapsed:.0f} ops/sec")
+        print(f"  Throughput: {iterations / elapsed:.0f} ops/sec")
 
         assert len(results) == iterations
         assert elapsed < 10.0, f"Concurrent processing took {elapsed}s, exceeds 10s threshold"

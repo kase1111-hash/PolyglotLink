@@ -6,12 +6,11 @@ Provides CLI commands for running and managing the PolyglotLink service.
 
 import argparse
 import asyncio
-import signal
 import sys
-from typing import Optional
 
-from polyglotlink.utils.config import get_settings, reload_settings
-from polyglotlink.utils.error_logging import flush as flush_errors, init_sentry
+from polyglotlink.utils.config import get_settings
+from polyglotlink.utils.error_logging import flush as flush_errors
+from polyglotlink.utils.error_logging import init_sentry
 from polyglotlink.utils.logging import configure_logging, get_logger
 
 
@@ -41,14 +40,16 @@ For more information, visit: https://github.com/polyglotlink/polyglotlink
     )
 
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="count",
         default=0,
         help="Increase verbosity (can be repeated)",
     )
 
     parser.add_argument(
-        "-q", "--quiet",
+        "-q",
+        "--quiet",
         action="store_true",
         help="Suppress non-error output",
     )
@@ -149,7 +150,8 @@ For more information, visit: https://github.com/polyglotlink/polyglotlink
         help="Export format (default: json)",
     )
     schema_export.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         type=str,
         help="Output file (default: stdout)",
     )
@@ -204,7 +206,7 @@ async def cmd_serve(args: argparse.Namespace) -> int:
     )
 
     # Import here to avoid circular imports
-    from polyglotlink.app.server import create_app, run_server
+    from polyglotlink.app.server import run_server
 
     # Build configuration overrides
     overrides = {}
@@ -238,7 +240,6 @@ async def cmd_serve(args: argparse.Namespace) -> int:
 
 def cmd_check(args: argparse.Namespace) -> int:
     """Run the check command."""
-    logger = get_logger("cli")
     settings = get_settings()
 
     print("PolyglotLink Configuration Check")
@@ -282,7 +283,9 @@ def cmd_check(args: argparse.Namespace) -> int:
     print(f"  Redis: {settings.redis.url}")
     print(f"  Neo4j: {settings.neo4j.uri}")
     print(f"  Weaviate: {settings.weaviate.url}")
-    print(f"  TimescaleDB: {settings.timescale.url.split('@')[-1] if '@' in settings.timescale.url else settings.timescale.url}")
+    print(
+        f"  TimescaleDB: {settings.timescale.url.split('@')[-1] if '@' in settings.timescale.url else settings.timescale.url}"
+    )
     print()
 
     # Check outputs
@@ -300,6 +303,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         # Check Redis
         try:
             import redis
+
             r = redis.from_url(settings.redis.url)
             r.ping()
             print("  Redis: OK")
@@ -311,6 +315,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         if settings.mqtt.enabled:
             try:
                 import paho.mqtt.client as mqtt
+
                 client = mqtt.Client()
                 client.connect(settings.mqtt.broker_host, settings.mqtt.broker_port, 5)
                 client.disconnect()
@@ -337,7 +342,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 1 if errors else 0
 
 
-def cmd_version(args: argparse.Namespace) -> int:
+def cmd_version(_args: argparse.Namespace) -> int:
     """Run the version command."""
     print("PolyglotLink v0.1.0")
     print()
@@ -352,11 +357,9 @@ async def cmd_test(args: argparse.Namespace) -> int:
     """Run the test command."""
     import json
 
-    logger = get_logger("cli")
-
     # Load input
     if args.input.startswith("@"):
-        with open(args.input[1:], "r") as f:
+        with open(args.input[1:]) as f:
             input_data = f.read()
     else:
         input_data = args.input
@@ -373,10 +376,10 @@ async def cmd_test(args: argparse.Namespace) -> int:
 
     # Import processing modules
     from polyglotlink.models.schemas import Protocol, RawMessage
+    from polyglotlink.modules.normalization_engine import NormalizationEngine
     from polyglotlink.modules.protocol_listener import detect_encoding, generate_uuid
     from polyglotlink.modules.schema_extractor import SchemaExtractor
     from polyglotlink.modules.semantic_translator_agent import SemanticTranslator
-    from polyglotlink.modules.normalization_engine import NormalizationEngine
 
     # Create raw message
     payload_bytes = json.dumps(payload).encode()
@@ -417,7 +420,7 @@ async def cmd_test(args: argparse.Namespace) -> int:
     print("Semantic Mapping:")
     print(f"  Confidence: {mapping.confidence:.2f}")
     print(f"  LLM Used: {mapping.llm_generated}")
-    print(f"  Mappings:")
+    print("  Mappings:")
     for m in mapping.field_mappings:
         print(f"    - {m.source_field} -> {m.target_field} ({m.resolution_method.value})")
     print()
@@ -433,7 +436,9 @@ async def cmd_test(args: argparse.Namespace) -> int:
         print()
         print("Conversions Applied:")
         for conv in normalized.conversions:
-            print(f"  - {conv.field}: {conv.original_value} {conv.from_unit} -> {conv.converted_value} {conv.to_unit}")
+            print(
+                f"  - {conv.field}: {conv.original_value} {conv.from_unit} -> {conv.converted_value} {conv.to_unit}"
+            )
 
     if normalized.validation_errors:
         print()
@@ -444,7 +449,7 @@ async def cmd_test(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     """Main entry point for the CLI."""
     parser = create_parser()
     args = parser.parse_args(argv)
