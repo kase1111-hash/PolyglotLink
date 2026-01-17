@@ -5,10 +5,10 @@ Integrates with Sentry for error tracking and monitoring.
 Provides utilities for capturing errors with context.
 """
 
-import sys
+from collections.abc import Callable
 from contextlib import contextmanager
 from functools import wraps
-from typing import Any, Callable, Dict, Optional, TypeVar
+from typing import Any, TypeVar
 
 from polyglotlink.utils.config import get_settings
 from polyglotlink.utils.exceptions import PolyglotLinkError
@@ -65,7 +65,7 @@ def init_sentry() -> bool:
             # Attach stacktrace to messages
             attach_stacktrace=True,
             # Set release version
-            release=f"polyglotlink@0.1.0",
+            release="polyglotlink@0.1.0",
             # Before send hook for filtering
             before_send=_before_send,
         )
@@ -86,7 +86,7 @@ def init_sentry() -> bool:
         return False
 
 
-def _before_send(event: Dict[str, Any], hint: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _before_send(event: dict[str, Any], hint: dict[str, Any]) -> dict[str, Any] | None:
     """
     Filter events before sending to Sentry.
 
@@ -100,10 +100,9 @@ def _before_send(event: Dict[str, Any], hint: Dict[str, Any]) -> Optional[Dict[s
         exc_type, exc_value, _ = exc_info
 
         # Don't send expected/recoverable errors
-        if isinstance(exc_value, PolyglotLinkError):
-            if exc_value.recoverable:
-                # Log locally but don't send to Sentry
-                return None
+        if isinstance(exc_value, PolyglotLinkError) and exc_value.recoverable:
+            # Log locally but don't send to Sentry
+            return None
 
     # Scrub sensitive data from request
     if "request" in event:
@@ -125,8 +124,16 @@ def _before_send(event: Dict[str, Any], hint: Dict[str, Any]) -> Optional[Dict[s
 def _scrub_sensitive(data: Any) -> Any:
     """Recursively scrub sensitive data from dictionaries."""
     sensitive_keys = {
-        "password", "api_key", "token", "secret", "authorization",
-        "apikey", "access_token", "refresh_token", "private_key", "dsn"
+        "password",
+        "api_key",
+        "token",
+        "secret",
+        "authorization",
+        "apikey",
+        "access_token",
+        "refresh_token",
+        "private_key",
+        "dsn",
     }
 
     if isinstance(data, dict):
@@ -141,10 +148,10 @@ def _scrub_sensitive(data: Any) -> Any:
 
 def capture_exception(
     error: Exception,
-    context: Optional[Dict[str, Any]] = None,
-    tags: Optional[Dict[str, str]] = None,
+    context: dict[str, Any] | None = None,
+    tags: dict[str, str] | None = None,
     level: str = "error",
-) -> Optional[str]:
+) -> str | None:
     """
     Capture an exception to Sentry.
 
@@ -201,9 +208,9 @@ def capture_exception(
 def capture_message(
     message: str,
     level: str = "info",
-    context: Optional[Dict[str, Any]] = None,
-    tags: Optional[Dict[str, str]] = None,
-) -> Optional[str]:
+    context: dict[str, Any] | None = None,
+    tags: dict[str, str] | None = None,
+) -> str | None:
     """
     Capture a message to Sentry.
 
@@ -243,8 +250,8 @@ def capture_message(
 
 
 def set_user(
-    user_id: Optional[str] = None,
-    device_id: Optional[str] = None,
+    user_id: str | None = None,
+    device_id: str | None = None,
     **extra: Any,
 ) -> None:
     """
@@ -278,7 +285,7 @@ def add_breadcrumb(
     message: str,
     category: str = "custom",
     level: str = "info",
-    data: Optional[Dict[str, Any]] = None,
+    data: dict[str, Any] | None = None,
 ) -> None:
     """
     Add a breadcrumb for Sentry event context.
@@ -309,8 +316,8 @@ def add_breadcrumb(
 @contextmanager
 def error_context(
     operation: str,
-    context: Optional[Dict[str, Any]] = None,
-    tags: Optional[Dict[str, str]] = None,
+    context: dict[str, Any] | None = None,
+    tags: dict[str, str] | None = None,
     reraise: bool = True,
 ):
     """
@@ -342,8 +349,8 @@ def error_context(
 
 
 def capture_errors(
-    operation: Optional[str] = None,
-    tags: Optional[Dict[str, str]] = None,
+    operation: str | None = None,
+    tags: dict[str, str] | None = None,
     reraise: bool = True,
 ) -> Callable[[F], F]:
     """
@@ -359,6 +366,7 @@ def capture_errors(
         async def process_message(msg):
             ...
     """
+
     def decorator(func: F) -> F:
         op_name = operation or func.__name__
 
@@ -374,6 +382,7 @@ def capture_errors(
 
         # Return appropriate wrapper based on function type
         import asyncio
+
         if asyncio.iscoroutinefunction(func):
             return async_wrapper  # type: ignore
         return sync_wrapper  # type: ignore
@@ -393,6 +402,7 @@ def flush(timeout: float = 2.0) -> None:
 
     try:
         import sentry_sdk
+
         sentry_sdk.flush(timeout=timeout)
     except Exception:
         pass

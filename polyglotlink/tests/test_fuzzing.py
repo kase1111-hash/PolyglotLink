@@ -7,14 +7,16 @@ unexpected behaviors through random input generation.
 Run with: pytest polyglotlink/tests/test_fuzzing.py -v
 """
 
-from datetime import datetime
+import contextlib
 import json
+from datetime import datetime
+
 import pytest
-from hypothesis import given, strategies as st, settings, assume, HealthCheck
+from hypothesis import HealthCheck, assume, given, settings
+from hypothesis import strategies as st
 from hypothesis.strategies import (
     binary,
     booleans,
-    builds,
     dictionaries,
     floats,
     integers,
@@ -30,21 +32,20 @@ from polyglotlink.models.schemas import (
     Protocol,
     RawMessage,
 )
-from polyglotlink.modules.schema_extractor import SchemaExtractor
 from polyglotlink.modules.normalization_engine import NormalizationEngine
 from polyglotlink.modules.protocol_listener import (
     detect_encoding,
     extract_device_id,
     generate_uuid,
 )
+from polyglotlink.modules.schema_extractor import SchemaExtractor
 from polyglotlink.utils.validation import (
     detect_malicious_patterns,
-    sanitize_string,
     sanitize_identifier,
+    sanitize_string,
     sanitize_topic,
     validate_json_payload,
 )
-
 
 # Custom strategies for IoT data
 json_primitives = one_of(
@@ -85,7 +86,10 @@ class TestSchemaExtractorFuzzing:
         return SchemaExtractor()
 
     @given(json_values)
-    @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture])
+    @settings(
+        max_examples=200,
+        suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
+    )
     def test_extract_schema_never_crashes(self, extractor, payload_data):
         """Schema extraction should never crash on any valid JSON structure."""
         try:
@@ -149,10 +153,9 @@ class TestSchemaExtractorFuzzing:
         )
 
         # Should not crash
-        try:
-            schema = extractor.extract_schema(raw)
-        except Exception:
-            pass  # Acceptable for truly invalid data
+        with contextlib.suppress(Exception):
+            # Acceptable for truly invalid data
+            extractor.extract_schema(raw)
 
 
 class TestEncodingDetectionFuzzing:
@@ -170,7 +173,7 @@ class TestEncodingDetectionFuzzing:
     @settings(max_examples=200)
     def test_detect_encoding_text_input(self, data):
         """Text input should be handled correctly."""
-        result = detect_encoding(data.encode('utf-8', errors='replace'))
+        result = detect_encoding(data.encode("utf-8", errors="replace"))
         assert result is not None
 
 
@@ -268,7 +271,7 @@ class TestNormalizationFuzzing:
     def test_unit_conversion_floats(self, normalizer, value):
         """Unit conversions should handle any float value."""
         # Test temperature conversion
-        if hasattr(normalizer, '_safe_eval'):
+        if hasattr(normalizer, "_safe_eval"):
             try:
                 result = normalizer._safe_eval("x * 1.8 + 32", value)
                 assert isinstance(result, (int, float))
@@ -279,7 +282,7 @@ class TestNormalizationFuzzing:
     @settings(max_examples=200, suppress_health_check=[HealthCheck.function_scoped_fixture])
     def test_unit_conversion_integers(self, normalizer, value):
         """Unit conversions should handle any integer value."""
-        if hasattr(normalizer, '_safe_eval'):
+        if hasattr(normalizer, "_safe_eval"):
             try:
                 result = normalizer._safe_eval("x / 1000", value)
                 assert isinstance(result, (int, float))
@@ -330,11 +333,13 @@ class TestEdgeCases:
 
     def test_unicode_field_names(self, extractor):
         """Unicode field names should be handled."""
-        payload = json.dumps({
-            "温度": 23.5,
-            "влажность": 65,
-            "🌡️": 100,
-        }).encode()
+        payload = json.dumps(
+            {
+                "温度": 23.5,
+                "влажность": 65,
+                "🌡️": 100,
+            }
+        ).encode()
         raw = RawMessage(
             message_id="test",
             device_id="device",
@@ -350,10 +355,12 @@ class TestEdgeCases:
 
     def test_very_long_field_names(self, extractor):
         """Very long field names should be handled."""
-        payload = json.dumps({
-            "a" * 1000: "value",
-            "b" * 500: 123,
-        }).encode()
+        payload = json.dumps(
+            {
+                "a" * 1000: "value",
+                "b" * 500: 123,
+            }
+        ).encode()
         raw = RawMessage(
             message_id="test",
             device_id="device",
@@ -368,12 +375,14 @@ class TestEdgeCases:
 
     def test_special_float_values(self, extractor):
         """Special float-like values should be handled."""
-        payload = json.dumps({
-            "zero": 0.0,
-            "negative_zero": -0.0,
-            "tiny": 1e-300,
-            "huge": 1e300,
-        }).encode()
+        payload = json.dumps(
+            {
+                "zero": 0.0,
+                "negative_zero": -0.0,
+                "tiny": 1e-300,
+                "huge": 1e300,
+            }
+        ).encode()
         raw = RawMessage(
             message_id="test",
             device_id="device",
@@ -405,9 +414,11 @@ class TestEdgeCases:
 
     def test_mixed_array_types(self, extractor):
         """Arrays with mixed types should be handled."""
-        payload = json.dumps({
-            "mixed": [1, "two", 3.0, True, None, {"nested": "obj"}],
-        }).encode()
+        payload = json.dumps(
+            {
+                "mixed": [1, "two", 3.0, True, None, {"nested": "obj"}],
+            }
+        ).encode()
         raw = RawMessage(
             message_id="test",
             device_id="device",

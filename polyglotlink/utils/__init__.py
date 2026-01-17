@@ -16,15 +16,11 @@ from polyglotlink.utils.error_logging import (
     capture_exception,
     capture_message,
     error_context,
-    flush as flush_errors,
     init_sentry,
     set_user,
 )
-from polyglotlink.utils.secrets import (
-    SecretsManager,
-    get_secret,
-    get_secrets_manager,
-    require_secret,
+from polyglotlink.utils.error_logging import (
+    flush as flush_errors,
 )
 from polyglotlink.utils.exceptions import (
     CacheError,
@@ -60,6 +56,17 @@ from polyglotlink.utils.logging import (
     get_logger,
     log_performance,
 )
+from polyglotlink.utils.metrics import (
+    PolyglotLinkMetrics,
+    get_metrics,
+    metrics,
+)
+from polyglotlink.utils.secrets import (
+    SecretsManager,
+    get_secret,
+    get_secrets_manager,
+    require_secret,
+)
 from polyglotlink.utils.validation import (
     detect_malicious_patterns,
     is_valid_topic,
@@ -75,11 +82,6 @@ from polyglotlink.utils.validation import (
     validate_number,
     validate_payload_size,
     validate_protocol,
-)
-from polyglotlink.utils.metrics import (
-    PolyglotLinkMetrics,
-    get_metrics,
-    metrics,
 )
 
 __all__ = [

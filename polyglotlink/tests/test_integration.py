@@ -6,23 +6,23 @@ from raw message ingestion through normalization and output.
 """
 
 import json
-import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from polyglotlink.models.schemas import (
     PayloadEncoding,
     Protocol,
     RawMessage,
 )
-from polyglotlink.modules.schema_extractor import SchemaExtractor
-from polyglotlink.modules.semantic_translator_agent import SemanticTranslator
 from polyglotlink.modules.normalization_engine import NormalizationEngine
 from polyglotlink.modules.protocol_listener import (
     detect_encoding,
     extract_device_id,
     generate_uuid,
 )
+from polyglotlink.modules.schema_extractor import SchemaExtractor
+from polyglotlink.modules.semantic_translator_agent import SemanticTranslator
 
 
 class TestEndToEndPipeline:
@@ -49,14 +49,16 @@ class TestEndToEndPipeline:
     ):
         """Test processing an environmental sensor message end-to-end."""
         # Step 1: Create raw message (simulating protocol listener output)
-        payload = json.dumps({
-            "temperature": 23.5,
-            "humidity": 65,
-            "pressure_hpa": 1013.25,
-            "battery_pct": 85,
-            "device_id": "env-sensor-001",
-            "timestamp": "2024-01-15T10:30:00Z"
-        }).encode()
+        payload = json.dumps(
+            {
+                "temperature": 23.5,
+                "humidity": 65,
+                "pressure_hpa": 1013.25,
+                "battery_pct": 85,
+                "device_id": "env-sensor-001",
+                "timestamp": "2024-01-15T10:30:00Z",
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id=generate_uuid(),
@@ -112,15 +114,17 @@ class TestEndToEndPipeline:
         normalization_engine,
     ):
         """Test processing a power meter message end-to-end."""
-        payload = json.dumps({
-            "voltage": 230.5,
-            "current": 2.3,
-            "power_w": 530.15,
-            "energy_kwh": 1234.56,
-            "power_factor": 0.95,
-            "frequency_hz": 50.0,
-            "ts": 1705312200000
-        }).encode()
+        payload = json.dumps(
+            {
+                "voltage": 230.5,
+                "current": 2.3,
+                "power_w": 530.15,
+                "energy_kwh": 1234.56,
+                "power_factor": 0.95,
+                "frequency_hz": 50.0,
+                "ts": 1705312200000,
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id=generate_uuid(),
@@ -150,16 +154,18 @@ class TestEndToEndPipeline:
         normalization_engine,
     ):
         """Test processing a GPS tracker message end-to-end."""
-        payload = json.dumps({
-            "lat": 40.7128,
-            "lng": -74.0060,
-            "altitude_m": 10.5,
-            "speed_kmh": 45.2,
-            "heading": 180,
-            "accuracy": 5.0,
-            "satellites": 8,
-            "timestamp": "2024-01-15T10:30:00Z"
-        }).encode()
+        payload = json.dumps(
+            {
+                "lat": 40.7128,
+                "lng": -74.0060,
+                "altitude_m": 10.5,
+                "speed_kmh": 45.2,
+                "heading": 180,
+                "accuracy": 5.0,
+                "satellites": 8,
+                "timestamp": "2024-01-15T10:30:00Z",
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id=generate_uuid(),
@@ -191,27 +197,16 @@ class TestEndToEndPipeline:
         normalization_engine,
     ):
         """Test processing a nested payload end-to-end."""
-        payload = json.dumps({
-            "device": {
-                "id": "sensor-001",
-                "type": "environmental",
-                "firmware": "1.2.3"
-            },
-            "readings": {
-                "temperature": {
-                    "value": 23.5,
-                    "unit": "celsius"
+        payload = json.dumps(
+            {
+                "device": {"id": "sensor-001", "type": "environmental", "firmware": "1.2.3"},
+                "readings": {
+                    "temperature": {"value": 23.5, "unit": "celsius"},
+                    "humidity": {"value": 65, "unit": "percent"},
                 },
-                "humidity": {
-                    "value": 65,
-                    "unit": "percent"
-                }
-            },
-            "meta": {
-                "timestamp": "2024-01-15T10:30:00Z",
-                "sequence": 12345
+                "meta": {"timestamp": "2024-01-15T10:30:00Z", "sequence": 12345},
             }
-        }).encode()
+        ).encode()
 
         raw = RawMessage(
             message_id=generate_uuid(),
@@ -288,10 +283,7 @@ class TestSchemaExtractorIntegration:
         assert schema.fields == []
 
     def test_handles_array_payload(self, extractor):
-        payload = json.dumps([
-            {"temp": 23.5, "id": 1},
-            {"temp": 24.0, "id": 2}
-        ]).encode()
+        payload = json.dumps([{"temp": 23.5, "id": 1}, {"temp": 24.0, "id": 2}]).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -308,10 +300,7 @@ class TestSchemaExtractorIntegration:
         assert len(schema.fields) > 0
 
     def test_handles_numeric_string_fields(self, extractor):
-        payload = json.dumps({
-            "value": "123.45",
-            "count": "100"
-        }).encode()
+        payload = json.dumps({"value": "123.45", "count": "100"}).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -384,10 +373,12 @@ class TestNormalizationIntegration:
     ):
         """Test that temperature values can be properly converted."""
         # Create a message with Fahrenheit temperature
-        payload = json.dumps({
-            "temperature_f": 77.0,  # 25°C in Fahrenheit
-            "device_id": "thermo-001"
-        }).encode()
+        payload = json.dumps(
+            {
+                "temperature_f": 77.0,  # 25°C in Fahrenheit
+                "device_id": "thermo-001",
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -419,10 +410,7 @@ class TestNormalizationIntegration:
         engine,
     ):
         """Test that unmapped fields are handled properly."""
-        payload = json.dumps({
-            "unknown_field_xyz": 42,
-            "another_mystery": "value"
-        }).encode()
+        payload = json.dumps({"unknown_field_xyz": 42, "another_mystery": "value"}).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -439,7 +427,7 @@ class TestNormalizationIntegration:
         normalized = engine.normalize_message(schema, mapping)
 
         # Unmapped fields should appear with prefix
-        unmapped_keys = [k for k in normalized.data.keys() if k.startswith("_unmapped")]
+        unmapped_keys = [k for k in normalized.data if k.startswith("_unmapped")]
         assert len(unmapped_keys) >= 0  # May or may not have unmapped depending on translator
 
 
@@ -466,10 +454,12 @@ class TestValidationIntegration:
         engine,
     ):
         """Test that out-of-range values are caught during normalization."""
-        payload = json.dumps({
-            "humidity": 150,  # Invalid: > 100%
-            "temperature": 23.5
-        }).encode()
+        payload = json.dumps(
+            {
+                "humidity": 150,  # Invalid: > 100%
+                "temperature": 23.5,
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -497,10 +487,7 @@ class TestValidationIntegration:
         engine,
     ):
         """Test handling of malformed timestamp values."""
-        payload = json.dumps({
-            "value": 42,
-            "timestamp": "not-a-valid-timestamp"
-        }).encode()
+        payload = json.dumps({"value": 42, "timestamp": "not-a-valid-timestamp"}).encode()
 
         raw = RawMessage(
             message_id="test-001",

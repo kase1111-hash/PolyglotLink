@@ -8,7 +8,7 @@ Protects against injection attacks and malformed input.
 import html
 import re
 import unicodedata
-from typing import Any, Dict, List, Optional, Set, TypeVar, Union
+from typing import Any, TypeVar
 
 from polyglotlink.utils.exceptions import ValidationError
 
@@ -20,7 +20,7 @@ T = TypeVar("T")
 # =============================================================================
 
 # Characters that should be stripped or escaped
-CONTROL_CHARS = set(chr(i) for i in range(32) if chr(i) not in '\t\n\r')
+CONTROL_CHARS = {chr(i) for i in range(32) if chr(i) not in "\t\n\r"}
 SQL_DANGEROUS_CHARS = {"'", '"', ";", "--", "/*", "*/", "xp_"}
 SHELL_DANGEROUS_CHARS = {"|", "&", ";", "$", "`", "(", ")", "{", "}", "[", "]", "<", ">", "\\"}
 
@@ -91,11 +91,7 @@ def sanitize_identifier(
         ValidationError: If identifier is invalid
     """
     if not value:
-        raise ValidationError(
-            field="identifier",
-            value=value,
-            reason="Identifier cannot be empty"
-        )
+        raise ValidationError(field="identifier", value=value, reason="Identifier cannot be empty")
 
     # Build allowed characters pattern
     allowed = r"a-zA-Z0-9"
@@ -120,9 +116,7 @@ def sanitize_identifier(
 
     if not sanitized:
         raise ValidationError(
-            field="identifier",
-            value=value,
-            reason="Identifier contains no valid characters"
+            field="identifier", value=value, reason="Identifier contains no valid characters"
         )
 
     return sanitized
@@ -159,11 +153,8 @@ def sanitize_topic(value: str, max_length: int = 1000) -> str:
 # JSON/Dict Validation
 # =============================================================================
 
-def validate_json_depth(
-    data: Union[Dict, List],
-    max_depth: int = 20,
-    current_depth: int = 0
-) -> bool:
+
+def validate_json_depth(data: dict | list, max_depth: int = 20, current_depth: int = 0) -> bool:
     """
     Validate that JSON nesting depth doesn't exceed maximum.
 
@@ -182,7 +173,7 @@ def validate_json_depth(
         raise ValidationError(
             field="json",
             value=f"depth={current_depth}",
-            reason=f"JSON nesting depth exceeds maximum of {max_depth}"
+            reason=f"JSON nesting depth exceeds maximum of {max_depth}",
         )
 
     if isinstance(data, dict):
@@ -198,7 +189,7 @@ def validate_json_depth(
 
 
 def validate_json_size(
-    data: Union[Dict, List],
+    data: dict | list,
     max_keys: int = 1000,
     max_string_length: int = 100000,
 ) -> bool:
@@ -227,7 +218,7 @@ def validate_json_size(
                 raise ValidationError(
                     field="json",
                     value=f"keys={key_count}",
-                    reason=f"JSON has too many keys (max: {max_keys})"
+                    reason=f"JSON has too many keys (max: {max_keys})",
                 )
             for value in obj.values():
                 count_and_validate(value)
@@ -239,7 +230,7 @@ def validate_json_size(
                 raise ValidationError(
                     field="json_string",
                     value=f"length={len(obj)}",
-                    reason=f"String value exceeds maximum length of {max_string_length}"
+                    reason=f"String value exceeds maximum length of {max_string_length}",
                 )
 
     count_and_validate(data)
@@ -247,9 +238,9 @@ def validate_json_size(
 
 
 def sanitize_dict_keys(
-    data: Dict[str, Any],
+    data: dict[str, Any],
     max_key_length: int = 255,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Sanitize dictionary keys recursively.
 
@@ -264,10 +255,7 @@ def sanitize_dict_keys(
 
     for key, value in data.items():
         # Sanitize key
-        sanitized_key = sanitize_identifier(
-            str(key)[:max_key_length],
-            max_length=max_key_length
-        )
+        sanitized_key = sanitize_identifier(str(key)[:max_key_length], max_length=max_key_length)
 
         # Recursively sanitize nested dicts
         if isinstance(value, dict):
@@ -287,14 +275,15 @@ def sanitize_dict_keys(
 # Numeric Validation
 # =============================================================================
 
+
 def validate_number(
     value: Any,
     field: str,
-    min_value: Optional[float] = None,
-    max_value: Optional[float] = None,
+    min_value: float | None = None,
+    max_value: float | None = None,
     allow_nan: bool = False,
     allow_inf: bool = False,
-) -> Union[int, float]:
+) -> int | float:
     """
     Validate and coerce a numeric value.
 
@@ -320,27 +309,15 @@ def validate_number(
             raise ValueError("Boolean not allowed")
         num = float(value)
     except (ValueError, TypeError) as e:
-        raise ValidationError(
-            field=field,
-            value=value,
-            reason=f"Cannot convert to number: {e}"
-        )
+        raise ValidationError(field=field, value=value, reason=f"Cannot convert to number: {e}")
 
     # Check for NaN
     if math.isnan(num) and not allow_nan:
-        raise ValidationError(
-            field=field,
-            value=value,
-            reason="NaN values not allowed"
-        )
+        raise ValidationError(field=field, value=value, reason="NaN values not allowed")
 
     # Check for infinity
     if math.isinf(num) and not allow_inf:
-        raise ValidationError(
-            field=field,
-            value=value,
-            reason="Infinity values not allowed"
-        )
+        raise ValidationError(field=field, value=value, reason="Infinity values not allowed")
 
     # Check bounds
     if min_value is not None and num < min_value:
@@ -348,7 +325,7 @@ def validate_number(
             field=field,
             value=value,
             reason=f"Value below minimum of {min_value}",
-            constraint={"min": min_value}
+            constraint={"min": min_value},
         )
 
     if max_value is not None and num > max_value:
@@ -356,7 +333,7 @@ def validate_number(
             field=field,
             value=value,
             reason=f"Value above maximum of {max_value}",
-            constraint={"max": max_value}
+            constraint={"max": max_value},
         )
 
     # Return as int if it's a whole number (but not NaN or Inf)
@@ -369,6 +346,7 @@ def validate_number(
 # =============================================================================
 # Payload Validation
 # =============================================================================
+
 
 def validate_payload_size(
     payload: bytes,
@@ -391,7 +369,7 @@ def validate_payload_size(
         raise ValidationError(
             field="payload",
             value=f"size={len(payload)}",
-            reason=f"Payload size ({len(payload)} bytes) exceeds maximum ({max_size} bytes)"
+            reason=f"Payload size ({len(payload)} bytes) exceeds maximum ({max_size} bytes)",
         )
     return True
 
@@ -401,7 +379,7 @@ def detect_malicious_patterns(
     check_sql: bool = True,
     check_script: bool = True,
     check_path_traversal: bool = True,
-) -> Optional[str]:
+) -> str | None:
     """
     Detect potentially malicious patterns in input.
 
@@ -460,7 +438,17 @@ def detect_malicious_patterns(
 # Schema Validation Helpers
 # =============================================================================
 
-VALID_FIELD_TYPES = {"null", "boolean", "integer", "float", "string", "datetime", "array", "object", "unknown"}
+VALID_FIELD_TYPES = {
+    "null",
+    "boolean",
+    "integer",
+    "float",
+    "string",
+    "datetime",
+    "array",
+    "object",
+    "unknown",
+}
 VALID_PROTOCOLS = {"MQTT", "CoAP", "Modbus", "OPC-UA", "HTTP", "WebSocket"}
 
 
@@ -542,7 +530,4 @@ def is_valid_topic(topic: str) -> bool:
         return False
 
     # Basic format check - alphanumeric, slashes, wildcards, dots, dashes, underscores
-    if not re.match(r'^[a-zA-Z0-9/+#._\-]+$', topic):
-        return False
-
-    return True
+    return bool(re.match(r"^[a-zA-Z0-9/+#._\-]+$", topic))

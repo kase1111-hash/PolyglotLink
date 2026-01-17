@@ -8,7 +8,7 @@ detecting field types, units, and semantic hints.
 import hashlib
 import re
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -17,7 +17,6 @@ from polyglotlink.models.schemas import (
     ExtractedField,
     ExtractedSchema,
     MappingSource,
-    PayloadEncoding,
     RawMessage,
     SchemaExtractorConfig,
 )
@@ -30,48 +29,40 @@ logger = structlog.get_logger(__name__)
 # Unit Pattern Detection
 # ============================================================================
 
-UNIT_PATTERNS: Dict[str, str] = {
+UNIT_PATTERNS: dict[str, str] = {
     # Temperature
     r"(temp|temperature).*(_c|_celsius|_centigrade)$": "celsius",
     r"(temp|temperature).*(_f|_fahrenheit)$": "fahrenheit",
     r"(temp|temperature).*(_k|_kelvin)$": "kelvin",
     r"^(tmp|temp|t)$": "celsius",  # Default assumption
-
     # Humidity
     r"(hum|humidity|rh).*(_pct|_percent|%)?$": "percent",
-
     # Pressure
     r"(press|pressure).*(_pa|_pascal)$": "pascal",
     r"(press|pressure).*(_bar)$": "bar",
     r"(press|pressure).*(_psi)$": "psi",
     r"(press|pressure).*(_hpa)$": "hectopascal",
-
     # Voltage/Current
     r"(volt|voltage|v)$": "volt",
     r"(current|amp|ampere|i)$": "ampere",
     r"(power|watt|w)$": "watt",
-
     # Speed/Flow
     r"(speed|velocity).*(_mps|_ms)$": "meters_per_second",
     r"(speed|velocity).*(_kmh|_kph)$": "kilometers_per_hour",
     r"(flow).*(_lpm|_lm)$": "liters_per_minute",
-
     # Distance/Length
     r"(dist|distance|length).*(_m|_meter)$": "meter",
     r"(dist|distance|length).*(_cm)$": "centimeter",
     r"(dist|distance|length).*(_mm)$": "millimeter",
-
     # Time
     r"(time|duration).*(_s|_sec|_seconds)$": "seconds",
     r"(time|duration).*(_ms|_milliseconds)$": "milliseconds",
-
     # Mass
     r"(weight|mass).*(_kg|_kilogram)$": "kilogram",
     r"(weight|mass).*(_g|_gram)$": "gram",
-
     # Percentage
     r".*(_pct|_percent|%)$": "percent",
-    r"^(pct|percent|ratio)$": "percent"
+    r"^(pct|percent|ratio)$": "percent",
 }
 
 
@@ -79,7 +70,7 @@ UNIT_PATTERNS: Dict[str, str] = {
 # Semantic Hint Detection
 # ============================================================================
 
-SEMANTIC_HINTS: Dict[str, str] = {
+SEMANTIC_HINTS: dict[str, str] = {
     # Environment
     r"(temp|temperature|tmp)": "temperature",
     r"(hum|humidity|rh)": "humidity",
@@ -88,7 +79,6 @@ SEMANTIC_HINTS: Dict[str, str] = {
     r"(co2|carbon_dioxide)": "co2_concentration",
     r"(pm25|pm2\.5)": "particulate_matter_2_5",
     r"(noise|sound|db|decibel)": "noise_level",
-
     # Motion/Position
     r"(accel|acceleration)": "acceleration",
     r"(gyro|angular)": "angular_velocity",
@@ -96,30 +86,28 @@ SEMANTIC_HINTS: Dict[str, str] = {
     r"(lon|lng|longitude)": "longitude",
     r"(alt|altitude|elevation)": "altitude",
     r"(speed|velocity)": "speed",
-
     # Electrical
     r"(volt|voltage)": "voltage",
     r"(current|ampere|amp)": "current",
     r"(power|watt)": "power",
     r"(energy|kwh)": "energy",
     r"(freq|frequency|hz)": "frequency",
-
     # State/Status
     r"(state|status)": "state",
     r"(online|connected|alive)": "connectivity",
     r"(battery|batt)": "battery_level",
     r"(rssi|signal)": "signal_strength",
-
     # Identifiers
     r"(id|uuid|guid)$": "identifier",
     r"(name|label)$": "name",
-    r"(timestamp|time|ts|datetime)": "timestamp"
+    r"(timestamp|time|ts|datetime)": "timestamp",
 }
 
 
 # ============================================================================
 # Type Detection
 # ============================================================================
+
 
 def is_iso_datetime(value: str) -> bool:
     """Check if string is ISO datetime format."""
@@ -163,7 +151,7 @@ def detect_type(value: Any) -> str:
     return "unknown"
 
 
-def infer_unit_from_key(key: str) -> Optional[str]:
+def infer_unit_from_key(key: str) -> str | None:
     """Infer unit from field name using patterns."""
     key_lower = key.lower()
 
@@ -174,7 +162,7 @@ def infer_unit_from_key(key: str) -> Optional[str]:
     return None
 
 
-def infer_semantic_hint(key: str, value: Any) -> Optional[str]:
+def infer_semantic_hint(key: str, _value: Any) -> str | None:
     """Infer semantic category from field name and value."""
     key_lower = key.lower()
 
@@ -188,7 +176,7 @@ def infer_semantic_hint(key: str, value: Any) -> Optional[str]:
 def is_timestamp_field(key: str, value: Any) -> bool:
     """Check if field is likely a timestamp."""
     key_lower = key.lower()
-    timestamp_keywords = ['timestamp', 'time', 'ts', 'datetime', 'created_at', 'updated_at', 'date']
+    timestamp_keywords = ["timestamp", "time", "ts", "datetime", "created_at", "updated_at", "date"]
 
     if any(kw in key_lower for kw in timestamp_keywords):
         return True
@@ -209,14 +197,14 @@ def is_timestamp_field(key: str, value: Any) -> bool:
 def is_identifier_field(key: str, value: Any) -> bool:
     """Check if field is likely an identifier."""
     key_lower = key.lower()
-    id_keywords = ['id', 'uuid', 'guid', 'key', 'code', 'serial', 'mac', 'imei']
+    id_keywords = ["id", "uuid", "guid", "key", "code", "serial", "mac", "imei"]
 
     if any(key_lower.endswith(kw) or key_lower.startswith(kw) for kw in id_keywords):
         return True
 
     # UUID pattern check
     if isinstance(value, str):
-        uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        uuid_pattern = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
         if re.match(uuid_pattern, value, re.IGNORECASE):
             return True
 
@@ -227,13 +215,14 @@ def is_identifier_field(key: str, value: Any) -> bool:
 # Flattening Utilities
 # ============================================================================
 
+
 def flatten_dict(
-    d: Dict[str, Any],
+    d: dict[str, Any],
     parent_key: str = "",
     separator: str = ".",
     max_depth: int = 10,
-    current_depth: int = 0
-) -> Dict[str, Any]:
+    current_depth: int = 0,
+) -> dict[str, Any]:
     """
     Flatten nested dictionary into dot-notation keys.
     {"a": {"b": 1}} -> {"a.b": 1}
@@ -241,16 +230,14 @@ def flatten_dict(
     if current_depth >= max_depth:
         return {parent_key: d} if parent_key else d
 
-    items: List[tuple] = []
+    items: list[tuple] = []
 
     for key, value in d.items():
         new_key = f"{parent_key}{separator}{key}" if parent_key else key
 
         if isinstance(value, dict):
             items.extend(
-                flatten_dict(
-                    value, new_key, separator, max_depth, current_depth + 1
-                ).items()
+                flatten_dict(value, new_key, separator, max_depth, current_depth + 1).items()
             )
         elif isinstance(value, list):
             # Handle arrays
@@ -274,17 +261,16 @@ def flatten_dict(
 # Schema Hashing and Caching
 # ============================================================================
 
-def generate_schema_hash(fields: List[ExtractedField]) -> str:
+
+def generate_schema_hash(fields: list[ExtractedField]) -> str:
     """
     Generate a fingerprint for the schema based on field names and types.
     Used for caching semantic mappings.
     """
     # Create canonical representation
-    canonical = sorted([
-        f"{f.key}:{f.value_type}"
-        for f in fields
-        if not f.is_timestamp and not f.is_identifier
-    ])
+    canonical = sorted(
+        [f"{f.key}:{f.value_type}" for f in fields if not f.is_timestamp and not f.is_identifier]
+    )
 
     schema_string = "|".join(canonical)
     return hashlib.sha256(schema_string.encode()).hexdigest()[:16]
@@ -294,12 +280,12 @@ class SchemaCache:
     """In-memory schema cache with optional Redis backing."""
 
     def __init__(self, ttl_days: int = 30, redis_client=None):
-        self._local_cache: Dict[str, CachedMapping] = {}
-        self._stats: Dict[str, Dict[str, int]] = {}
+        self._local_cache: dict[str, CachedMapping] = {}
+        self._stats: dict[str, dict[str, int]] = {}
         self._ttl = timedelta(days=ttl_days)
         self._redis = redis_client
 
-    def get(self, schema_signature: str) -> Optional[CachedMapping]:
+    def get(self, schema_signature: str) -> CachedMapping | None:
         """Check if we've seen this schema before."""
         cache_key = f"schema:{schema_signature}"
 
@@ -335,27 +321,25 @@ class SchemaCache:
         # Persist to Redis if available
         if self._redis:
             try:
-                self._redis.setex(
-                    cache_key,
-                    self._ttl,
-                    mapping.model_dump_json()
-                )
+                self._redis.setex(cache_key, self._ttl, mapping.model_dump_json())
             except Exception as e:
                 logger.warning("Redis cache write failed", error=str(e))
 
     def _update_stats(self, schema_signature: str) -> None:
         """Track cache statistics."""
         if schema_signature not in self._stats:
-            self._stats[schema_signature] = {'hits': 0}
-        self._stats[schema_signature]['hits'] += 1
+            self._stats[schema_signature] = {"hits": 0}
+        self._stats[schema_signature]["hits"] += 1
 
 
 # ============================================================================
 # Schema Extractor
 # ============================================================================
 
+
 class UnsupportedEncodingError(Exception):
     """Raised when payload encoding is not supported."""
+
     pass
 
 
@@ -365,9 +349,7 @@ class SchemaExtractor:
     """
 
     def __init__(
-        self,
-        config: Optional[SchemaExtractorConfig] = None,
-        cache: Optional[SchemaCache] = None
+        self, config: SchemaExtractorConfig | None = None, cache: SchemaCache | None = None
     ):
         self.config = config or SchemaExtractorConfig()
         self.cache = cache or SchemaCache(ttl_days=self.config.cache_ttl_days)
@@ -384,26 +366,18 @@ class SchemaExtractor:
         try:
             decoded = parser(raw.payload_raw)
         except Exception as e:
-            logger.error(
-                "Failed to decode payload",
-                encoding=raw.payload_encoding,
-                error=str(e)
-            )
-            decoded = {'_raw': raw.payload_raw.hex()}
+            logger.error("Failed to decode payload", encoding=raw.payload_encoding, error=str(e))
+            decoded = {"_raw": raw.payload_raw.hex()}
 
         # Ensure decoded is a dict
         if not isinstance(decoded, dict):
-            decoded = {'value': decoded}
+            decoded = {"value": decoded}
 
         # Flatten nested structures
-        flat_fields = flatten_dict(
-            decoded,
-            separator=".",
-            max_depth=self.config.max_nesting_depth
-        )
+        flat_fields = flatten_dict(decoded, separator=".", max_depth=self.config.max_nesting_depth)
 
         # Extract field information
-        fields: List[ExtractedField] = []
+        fields: list[ExtractedField] = []
         for key, value in flat_fields.items():
             # Skip null fields if configured
             if value is None and not self.config.preserve_null_fields:
@@ -426,7 +400,7 @@ class SchemaExtractor:
                 inferred_unit=inferred_unit,
                 inferred_semantic=inferred_semantic,
                 is_timestamp=is_timestamp_field(key, value),
-                is_identifier=is_identifier_field(key, value)
+                is_identifier=is_identifier_field(key, value),
             )
             fields.append(field)
 
@@ -445,15 +419,15 @@ class SchemaExtractor:
             schema_signature=schema_signature,
             cached_mapping=cached_mapping,
             payload_decoded=decoded,
-            extracted_at=datetime.utcnow()
+            extracted_at=datetime.utcnow(),
         )
 
     def cache_mapping(
         self,
         schema_signature: str,
-        field_mappings: List,
+        field_mappings: list,
         confidence: float,
-        source: MappingSource = MappingSource.LLM
+        source: MappingSource = MappingSource.LLM,
     ) -> None:
         """Store a learned schema mapping for future reuse."""
         cached = CachedMapping(
@@ -462,14 +436,10 @@ class SchemaExtractor:
             confidence=confidence,
             created_at=datetime.utcnow(),
             source=source,
-            hit_count=0
+            hit_count=0,
         )
         self.cache.set(schema_signature, cached)
-        logger.info(
-            "Cached new schema mapping",
-            signature=schema_signature,
-            source=source.value
-        )
+        logger.info("Cached new schema mapping", signature=schema_signature, source=source.value)
 
     def get_field_summary(self, schema: ExtractedSchema) -> str:
         """Generate a human-readable summary of extracted fields."""

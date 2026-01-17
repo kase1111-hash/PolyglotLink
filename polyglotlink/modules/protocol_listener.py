@@ -7,13 +7,15 @@ protocols: MQTT, CoAP, Modbus, OPC-UA, HTTP, and WebSocket.
 
 import asyncio
 import base64
+import contextlib
 import json
 import re
 import uuid
 import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator, Callable
 from datetime import datetime
-from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -37,6 +39,7 @@ logger = structlog.get_logger(__name__)
 # Payload Encoding Detection
 # ============================================================================
 
+
 def is_likely_protobuf(payload: bytes) -> bool:
     """Heuristic check for protobuf format based on field tags."""
     if len(payload) < 2:
@@ -50,12 +53,12 @@ def is_likely_protobuf(payload: bytes) -> bool:
 def is_likely_csv(payload: bytes) -> bool:
     """Check if payload looks like CSV data."""
     try:
-        text = payload.decode('utf-8')
-        lines = text.strip().split('\n')
+        text = payload.decode("utf-8")
+        lines = text.strip().split("\n")
         if len(lines) < 1:
             return False
         # Check for consistent delimiter usage
-        delimiters = [',', ';', '\t']
+        delimiters = [",", ";", "\t"]
         for delim in delimiters:
             counts = [line.count(delim) for line in lines]
             if counts[0] > 0 and all(c == counts[0] for c in counts):
@@ -89,6 +92,7 @@ def detect_encoding(payload: bytes) -> PayloadEncoding:
     # Try CBOR (requires cbor2)
     try:
         import cbor2
+
         cbor2.loads(payload)
         return PayloadEncoding.CBOR
     except Exception:
@@ -111,19 +115,19 @@ def detect_encoding(payload: bytes) -> PayloadEncoding:
     return PayloadEncoding.BINARY
 
 
-def xml_to_dict(element: ET.Element) -> Dict[str, Any]:
+def xml_to_dict(element: ET.Element) -> dict[str, Any]:
     """Convert XML element to dictionary."""
-    result: Dict[str, Any] = {}
+    result: dict[str, Any] = {}
 
     # Add attributes
     if element.attrib:
-        result['@attributes'] = dict(element.attrib)
+        result["@attributes"] = dict(element.attrib)
 
     # Add text content
     if element.text and element.text.strip():
         if len(element) == 0:
             return element.text.strip()
-        result['#text'] = element.text.strip()
+        result["#text"] = element.text.strip()
 
     # Add children
     for child in element:
@@ -139,47 +143,48 @@ def xml_to_dict(element: ET.Element) -> Dict[str, Any]:
     return result
 
 
-def csv_to_dict(payload: bytes) -> Dict[str, Any]:
+def csv_to_dict(payload: bytes) -> dict[str, Any]:
     """Convert CSV payload to dictionary."""
     import csv
     import io
 
-    text = payload.decode('utf-8')
+    text = payload.decode("utf-8")
     reader = csv.DictReader(io.StringIO(text))
     rows = list(reader)
 
     if len(rows) == 1:
         return rows[0]
-    return {'rows': rows, '_count': len(rows)}
+    return {"rows": rows, "_count": len(rows)}
 
 
-def parse_modbus_registers(payload: bytes) -> Dict[str, Any]:
+def parse_modbus_registers(payload: bytes) -> dict[str, Any]:
     """Parse Modbus register data."""
     registers = []
     for i in range(0, len(payload), 2):
-        value = int.from_bytes(payload[i:i+2], 'big')
+        value = int.from_bytes(payload[i : i + 2], "big")
         registers.append(value)
-    return {'registers': registers, '_count': len(registers)}
+    return {"registers": registers, "_count": len(registers)}
 
 
 # Encoding parsers registry
-ENCODING_PARSERS: Dict[PayloadEncoding, Callable[[bytes], Any]] = {
+ENCODING_PARSERS: dict[PayloadEncoding, Callable[[bytes], Any]] = {
     PayloadEncoding.JSON: lambda p: json.loads(p),
     PayloadEncoding.XML: lambda p: xml_to_dict(ET.fromstring(p)),
     PayloadEncoding.CSV: csv_to_dict,
     PayloadEncoding.MODBUS_REGISTERS: parse_modbus_registers,
     PayloadEncoding.BINARY: lambda p: {
-        'raw_hex': p.hex(),
-        'raw_base64': base64.b64encode(p).decode()
+        "raw_hex": p.hex(),
+        "raw_base64": base64.b64encode(p).decode(),
     },
 }
 
 # Add CBOR parser if available
 try:
     import cbor2
+
     ENCODING_PARSERS[PayloadEncoding.CBOR] = lambda p: cbor2.loads(p)
 except ImportError:
-    ENCODING_PARSERS[PayloadEncoding.CBOR] = lambda p: {'error': 'cbor2 not installed'}
+    ENCODING_PARSERS[PayloadEncoding.CBOR] = lambda _p: {"error": "cbor2 not installed"}
 
 
 def generate_uuid() -> str:
@@ -193,11 +198,11 @@ def extract_device_id(identifier: str) -> str:
     Common patterns: devices/{id}/telemetry, sensors/{id}, etc.
     """
     patterns = [
-        r'devices?/([^/]+)',
-        r'sensors?/([^/]+)',
-        r'things?/([^/]+)',
-        r'([^/]+)/telemetry',
-        r'([^/]+)/data',
+        r"devices?/([^/]+)",
+        r"sensors?/([^/]+)",
+        r"things?/([^/]+)",
+        r"([^/]+)/telemetry",
+        r"([^/]+)/data",
     ]
 
     for pattern in patterns:
@@ -206,13 +211,14 @@ def extract_device_id(identifier: str) -> str:
             return match.group(1)
 
     # Fallback: use the last meaningful segment
-    segments = [s for s in identifier.split('/') if s]
-    return segments[-1] if segments else 'unknown'
+    segments = [s for s in identifier.split("/") if s]
+    return segments[-1] if segments else "unknown"
 
 
 # ============================================================================
 # Base Protocol Handler
 # ============================================================================
+
 
 class BaseProtocolHandler(ABC):
     """Abstract base class for protocol handlers."""
@@ -236,12 +242,9 @@ class BaseProtocolHandler(ABC):
         """Yield messages from the handler."""
         while self._running or not self._message_queue.empty():
             try:
-                message = await asyncio.wait_for(
-                    self._message_queue.get(),
-                    timeout=1.0
-                )
+                message = await asyncio.wait_for(self._message_queue.get(), timeout=1.0)
                 yield message
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def emit_message(self, message: RawMessage) -> None:
@@ -253,6 +256,7 @@ class BaseProtocolHandler(ABC):
 # MQTT Handler
 # ============================================================================
 
+
 class MQTTHandler(BaseProtocolHandler):
     """MQTT protocol handler."""
 
@@ -260,23 +264,17 @@ class MQTTHandler(BaseProtocolHandler):
         super().__init__(Protocol.MQTT)
         self.config = config
         self._client = None
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
     async def start(self) -> None:
         """Start MQTT listener."""
         try:
             import paho.mqtt.client as mqtt
 
-            self._client = mqtt.Client(
-                client_id=self.config.client_id,
-                protocol=mqtt.MQTTv311
-            )
+            self._client = mqtt.Client(client_id=self.config.client_id, protocol=mqtt.MQTTv311)
 
             if self.config.username and self.config.password:
-                self._client.username_pw_set(
-                    self.config.username,
-                    self.config.password
-                )
+                self._client.username_pw_set(self.config.username, self.config.password)
 
             if self.config.tls_enabled and self.config.ca_cert:
                 self._client.tls_set(ca_certs=self.config.ca_cert)
@@ -287,16 +285,11 @@ class MQTTHandler(BaseProtocolHandler):
             self._client.on_disconnect = self._on_disconnect
 
             self._running = True
-            self._client.connect_async(
-                self.config.broker_host,
-                self.config.broker_port
-            )
+            self._client.connect_async(self.config.broker_host, self.config.broker_port)
             self._client.loop_start()
 
             logger.info(
-                "MQTT handler started",
-                broker=self.config.broker_host,
-                port=self.config.broker_port
+                "MQTT handler started", broker=self.config.broker_host, port=self.config.broker_port
             )
         except Exception as e:
             logger.error("Failed to start MQTT handler", error=str(e))
@@ -310,7 +303,7 @@ class MQTTHandler(BaseProtocolHandler):
             self._client.disconnect()
         logger.info("MQTT handler stopped")
 
-    def _on_connect(self, client, userdata, flags, rc):
+    def _on_connect(self, client, _userdata, _flags, rc):
         """Handle MQTT connection."""
         if rc == 0:
             logger.info("MQTT connected successfully")
@@ -320,7 +313,7 @@ class MQTTHandler(BaseProtocolHandler):
         else:
             logger.error("MQTT connection failed", rc=rc)
 
-    def _on_message(self, client, userdata, msg):
+    def _on_message(self, _client, _userdata, msg):
         """Handle incoming MQTT message."""
         try:
             raw = RawMessage(
@@ -334,29 +327,27 @@ class MQTTHandler(BaseProtocolHandler):
                 retained=msg.retain,
                 timestamp=datetime.utcnow(),
                 metadata={
-                    'broker': self.config.broker_host,
-                    'topic_pattern': self._get_matching_pattern(msg.topic)
-                }
+                    "broker": self.config.broker_host,
+                    "topic_pattern": self._get_matching_pattern(msg.topic),
+                },
             )
 
             # Use thread-safe method to add to queue
-            asyncio.run_coroutine_threadsafe(
-                self.emit_message(raw),
-                asyncio.get_event_loop()
-            )
+            asyncio.run_coroutine_threadsafe(self.emit_message(raw), asyncio.get_event_loop())
         except Exception as e:
             logger.error("Error processing MQTT message", error=str(e))
 
-    def _on_disconnect(self, client, userdata, rc):
+    def _on_disconnect(self, _client, _userdata, rc):
         """Handle MQTT disconnection."""
         if rc != 0:
             logger.warning("MQTT unexpected disconnection", rc=rc)
 
-    def _get_matching_pattern(self, topic: str) -> Optional[str]:
+    def _get_matching_pattern(self, topic: str) -> str | None:
         """Find which subscription pattern matched this topic."""
         import fnmatch
+
         for pattern in self.config.topic_patterns:
-            mqtt_pattern = pattern.replace('+', '*').replace('#', '**')
+            mqtt_pattern = pattern.replace("+", "*").replace("#", "**")
             if fnmatch.fnmatch(topic, mqtt_pattern):
                 return pattern
         return None
@@ -365,6 +356,7 @@ class MQTTHandler(BaseProtocolHandler):
 # ============================================================================
 # HTTP Webhook Handler
 # ============================================================================
+
 
 class HTTPHandler(BaseProtocolHandler):
     """HTTP webhook handler using FastAPI."""
@@ -378,8 +370,8 @@ class HTTPHandler(BaseProtocolHandler):
     async def start(self) -> None:
         """Start HTTP server."""
         try:
-            from fastapi import FastAPI, Request
             import uvicorn
+            from fastapi import FastAPI, Request
 
             self._app = FastAPI(title="PolyglotLink HTTP Ingress")
 
@@ -390,21 +382,18 @@ class HTTPHandler(BaseProtocolHandler):
 
                 raw = RawMessage(
                     message_id=generate_uuid(),
-                    device_id=(
-                        request.headers.get("X-Device-ID") or
-                        extract_device_id(full_path)
-                    ),
+                    device_id=(request.headers.get("X-Device-ID") or extract_device_id(full_path)),
                     protocol=Protocol.HTTP,
                     topic=full_path,
                     payload_raw=body,
                     payload_encoding=detect_encoding(body),
                     timestamp=datetime.utcnow(),
                     metadata={
-                        'method': request.method,
-                        'content_type': request.headers.get("Content-Type"),
-                        'headers': dict(request.headers),
-                        'query_params': dict(request.query_params)
-                    }
+                        "method": request.method,
+                        "content_type": request.headers.get("Content-Type"),
+                        "headers": dict(request.headers),
+                        "query_params": dict(request.query_params),
+                    },
                 )
 
                 await self.emit_message(raw)
@@ -417,10 +406,7 @@ class HTTPHandler(BaseProtocolHandler):
             self._running = True
 
             config = uvicorn.Config(
-                self._app,
-                host=self.config.host,
-                port=self.config.port,
-                log_level="warning"
+                self._app, host=self.config.host, port=self.config.port, log_level="warning"
             )
             self._server = uvicorn.Server(config)
 
@@ -431,7 +417,7 @@ class HTTPHandler(BaseProtocolHandler):
                 "HTTP handler started",
                 host=self.config.host,
                 port=self.config.port,
-                path_prefix=self.config.path_prefix
+                path_prefix=self.config.path_prefix,
             )
         except Exception as e:
             logger.error("Failed to start HTTP handler", error=str(e))
@@ -449,6 +435,7 @@ class HTTPHandler(BaseProtocolHandler):
 # CoAP Handler
 # ============================================================================
 
+
 class CoAPHandler(BaseProtocolHandler):
     """CoAP protocol handler."""
 
@@ -464,12 +451,12 @@ class CoAPHandler(BaseProtocolHandler):
             import aiocoap.resource as resource
 
             class IngestResource(resource.Resource):
-                def __init__(self, handler: 'CoAPHandler'):
+                def __init__(self, handler: "CoAPHandler"):
                     super().__init__()
                     self.handler = handler
 
                 async def render_post(self, request):
-                    path = '/'.join(request.opt.uri_path)
+                    path = "/".join(request.opt.uri_path)
 
                     raw = RawMessage(
                         message_id=generate_uuid(),
@@ -480,31 +467,30 @@ class CoAPHandler(BaseProtocolHandler):
                         payload_encoding=detect_encoding(request.payload),
                         timestamp=datetime.utcnow(),
                         metadata={
-                            'coap_type': request.mtype.name if hasattr(request.mtype, 'name') else str(request.mtype),
-                            'content_format': request.opt.content_format
-                        }
+                            "coap_type": request.mtype.name
+                            if hasattr(request.mtype, "name")
+                            else str(request.mtype),
+                            "content_format": request.opt.content_format,
+                        },
                     )
 
                     await self.handler.emit_message(raw)
 
-                    return aiocoap.Message(code=aiocoap.CHANGED, payload=b'OK')
+                    return aiocoap.Message(code=aiocoap.CHANGED, payload=b"OK")
 
             root = resource.Site()
-            root.add_resource(('.well-known', 'core'), resource.WKCResource(root.get_resources_as_linkheader))
-            root.add_resource(('ingest',), IngestResource(self))
+            root.add_resource(
+                (".well-known", "core"), resource.WKCResource(root.get_resources_as_linkheader)
+            )
+            root.add_resource(("ingest",), IngestResource(self))
 
             self._context = await aiocoap.Context.create_server_context(
-                root,
-                bind=(self.config.host, self.config.port)
+                root, bind=(self.config.host, self.config.port)
             )
 
             self._running = True
 
-            logger.info(
-                "CoAP handler started",
-                host=self.config.host,
-                port=self.config.port
-            )
+            logger.info("CoAP handler started", host=self.config.host, port=self.config.port)
         except ImportError:
             logger.warning("aiocoap not installed, CoAP handler disabled")
         except Exception as e:
@@ -523,6 +509,7 @@ class CoAPHandler(BaseProtocolHandler):
 # Modbus Handler
 # ============================================================================
 
+
 class ModbusHandler(BaseProtocolHandler):
     """Modbus TCP polling handler."""
 
@@ -530,29 +517,24 @@ class ModbusHandler(BaseProtocolHandler):
         super().__init__(Protocol.MODBUS)
         self.config = config
         self._client = None
-        self._poll_task: Optional[asyncio.Task] = None
+        self._poll_task: asyncio.Task | None = None
 
     async def start(self) -> None:
         """Start Modbus polling."""
         try:
             from pymodbus.client import ModbusTcpClient
 
-            self._client = ModbusTcpClient(
-                self.config.host,
-                port=self.config.port
-            )
+            self._client = ModbusTcpClient(self.config.host, port=self.config.port)
 
             if not self._client.connect():
-                raise ConnectionError(f"Failed to connect to Modbus at {self.config.host}:{self.config.port}")
+                raise ConnectionError(
+                    f"Failed to connect to Modbus at {self.config.host}:{self.config.port}"
+                )
 
             self._running = True
             self._poll_task = asyncio.create_task(self._poll_loop())
 
-            logger.info(
-                "Modbus handler started",
-                host=self.config.host,
-                port=self.config.port
-            )
+            logger.info("Modbus handler started", host=self.config.host, port=self.config.port)
         except ImportError:
             logger.warning("pymodbus not installed, Modbus handler disabled")
         except Exception as e:
@@ -564,10 +546,8 @@ class ModbusHandler(BaseProtocolHandler):
         self._running = False
         if self._poll_task:
             self._poll_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._poll_task
-            except asyncio.CancelledError:
-                pass
         if self._client:
             self._client.close()
         logger.info("Modbus handler stopped")
@@ -579,16 +559,14 @@ class ModbusHandler(BaseProtocolHandler):
                 for block in device.register_blocks:
                     try:
                         result = self._client.read_holding_registers(
-                            address=block.get('start', 0),
-                            count=block.get('count', 1),
-                            slave=device.slave_id
+                            address=block.get("start", 0),
+                            count=block.get("count", 1),
+                            slave=device.slave_id,
                         )
 
                         if not result.isError():
                             # Encode registers as bytes
-                            payload = b''.join(
-                                r.to_bytes(2, 'big') for r in result.registers
-                            )
+                            payload = b"".join(r.to_bytes(2, "big") for r in result.registers)
 
                             raw = RawMessage(
                                 message_id=generate_uuid(),
@@ -599,20 +577,16 @@ class ModbusHandler(BaseProtocolHandler):
                                 payload_encoding=PayloadEncoding.MODBUS_REGISTERS,
                                 timestamp=datetime.utcnow(),
                                 metadata={
-                                    'slave_id': device.slave_id,
-                                    'register_start': block.get('start', 0),
-                                    'register_count': block.get('count', 1),
-                                    'register_type': block.get('type', 'holding')
-                                }
+                                    "slave_id": device.slave_id,
+                                    "register_start": block.get("start", 0),
+                                    "register_count": block.get("count", 1),
+                                    "register_type": block.get("type", "holding"),
+                                },
                             )
 
                             await self.emit_message(raw)
                     except Exception as e:
-                        logger.error(
-                            "Modbus poll error",
-                            device=device.device_id,
-                            error=str(e)
-                        )
+                        logger.error("Modbus poll error", device=device.device_id, error=str(e))
 
             await asyncio.sleep(self.config.poll_interval_seconds)
 
@@ -620,6 +594,7 @@ class ModbusHandler(BaseProtocolHandler):
 # ============================================================================
 # OPC-UA Handler
 # ============================================================================
+
 
 class OPCUAHandler(BaseProtocolHandler):
     """OPC-UA subscription handler."""
@@ -645,8 +620,7 @@ class OPCUAHandler(BaseProtocolHandler):
             # Create subscription
             handler = self._create_handler()
             self._subscription = await self._client.create_subscription(
-                period=self.config.subscription_interval_ms,
-                handler=handler
+                period=self.config.subscription_interval_ms, handler=handler
             )
 
             # Subscribe to monitored nodes
@@ -659,7 +633,7 @@ class OPCUAHandler(BaseProtocolHandler):
             logger.info(
                 "OPC-UA handler started",
                 endpoint=self.config.endpoint_url,
-                nodes=len(self.config.monitored_nodes)
+                nodes=len(self.config.monitored_nodes),
             )
         except ImportError:
             logger.warning("asyncua not installed, OPC-UA handler disabled")
@@ -684,10 +658,10 @@ class OPCUAHandler(BaseProtocolHandler):
             async def datachange_notification(self, node, val, data):
                 try:
                     # Serialize the value
-                    if hasattr(val, '__dict__'):
+                    if hasattr(val, "__dict__"):
                         payload = json.dumps(val.__dict__, default=str).encode()
                     else:
-                        payload = json.dumps({'value': val}, default=str).encode()
+                        payload = json.dumps({"value": val}, default=str).encode()
 
                     raw = RawMessage(
                         message_id=generate_uuid(),
@@ -698,10 +672,10 @@ class OPCUAHandler(BaseProtocolHandler):
                         payload_encoding=PayloadEncoding.JSON,
                         timestamp=data.monitored_item.Value.SourceTimestamp or datetime.utcnow(),
                         metadata={
-                            'node_id': str(node),
-                            'status_code': str(data.monitored_item.Value.StatusCode),
-                            'server_timestamp': str(data.monitored_item.Value.ServerTimestamp)
-                        }
+                            "node_id": str(node),
+                            "status_code": str(data.monitored_item.Value.StatusCode),
+                            "server_timestamp": str(data.monitored_item.Value.ServerTimestamp),
+                        },
                     )
 
                     await parent.emit_message(raw)
@@ -714,6 +688,7 @@ class OPCUAHandler(BaseProtocolHandler):
 # ============================================================================
 # WebSocket Handler
 # ============================================================================
+
 
 class WebSocketHandler(BaseProtocolHandler):
     """WebSocket server handler."""
@@ -733,10 +708,7 @@ class WebSocketHandler(BaseProtocolHandler):
                 self._connections.add(websocket)
                 try:
                     async for message in websocket:
-                        if isinstance(message, str):
-                            payload = message.encode()
-                        else:
-                            payload = message
+                        payload = message.encode() if isinstance(message, str) else message
 
                         raw = RawMessage(
                             message_id=generate_uuid(),
@@ -747,28 +719,20 @@ class WebSocketHandler(BaseProtocolHandler):
                             payload_encoding=detect_encoding(payload),
                             timestamp=datetime.utcnow(),
                             metadata={
-                                'remote_address': str(websocket.remote_address),
-                                'path': path
-                            }
+                                "remote_address": str(websocket.remote_address),
+                                "path": path,
+                            },
                         )
 
                         await self.emit_message(raw)
                 finally:
                     self._connections.discard(websocket)
 
-            self._server = await websockets.serve(
-                handler,
-                self.config.host,
-                self.config.port
-            )
+            self._server = await websockets.serve(handler, self.config.host, self.config.port)
 
             self._running = True
 
-            logger.info(
-                "WebSocket handler started",
-                host=self.config.host,
-                port=self.config.port
-            )
+            logger.info("WebSocket handler started", host=self.config.host, port=self.config.port)
         except ImportError:
             logger.warning("websockets not installed, WebSocket handler disabled")
         except Exception as e:
@@ -791,6 +755,7 @@ class WebSocketHandler(BaseProtocolHandler):
 # Protocol Listener Manager
 # ============================================================================
 
+
 class ProtocolListener:
     """
     Manages all protocol handlers and provides unified message stream.
@@ -798,7 +763,7 @@ class ProtocolListener:
 
     def __init__(self, config: ProtocolListenerConfig):
         self.config = config
-        self._handlers: List[BaseProtocolHandler] = []
+        self._handlers: list[BaseProtocolHandler] = []
         self._running = False
 
     async def start_listeners(self) -> None:
@@ -834,10 +799,7 @@ class ProtocolListener:
             self._handlers.append(handler)
 
         self._running = True
-        logger.info(
-            "Protocol listener started",
-            handlers=len(self._handlers)
-        )
+        logger.info("Protocol listener started", handlers=len(self._handlers))
 
     async def stop_listeners(self) -> None:
         """Stop all protocol handlers."""
@@ -852,6 +814,7 @@ class ProtocolListener:
         Yield messages from all handlers.
         Merges streams from all active protocol handlers.
         """
+
         async def handler_messages(handler: BaseProtocolHandler):
             async for msg in handler.messages():
                 yield msg
@@ -869,7 +832,7 @@ class ProtocolListener:
 
             await asyncio.sleep(0.01)  # Small delay to prevent busy loop
 
-    def get_handler(self, protocol: Protocol) -> Optional[BaseProtocolHandler]:
+    def get_handler(self, protocol: Protocol) -> BaseProtocolHandler | None:
         """Get handler for specific protocol."""
         for handler in self._handlers:
             if handler.protocol == protocol:

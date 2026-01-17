@@ -6,10 +6,10 @@ Kafka, MQTT, HTTP webhooks, WebSocket, TimescaleDB, and JSON-LD export.
 """
 
 import asyncio
+import contextlib
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set, Tuple
 
 import structlog
 
@@ -22,9 +22,11 @@ logger = structlog.get_logger(__name__)
 # Configuration
 # ============================================================================
 
+
 @dataclass
 class KafkaOutputConfig:
     """Kafka output configuration."""
+
     enabled: bool = False
     bootstrap_servers: str = "localhost:9092"
     topic_prefix: str = "iot.normalized"
@@ -37,24 +39,26 @@ class KafkaOutputConfig:
 @dataclass
 class MQTTOutputConfig:
     """MQTT output configuration."""
+
     enabled: bool = False
     broker_host: str = "localhost"
     broker_port: int = 1883
     topic_prefix: str = "normalized"
     qos: int = 1
     retain: bool = False
-    username: Optional[str] = None
-    password: Optional[str] = None
+    username: str | None = None
+    password: str | None = None
 
 
 @dataclass
 class HTTPOutputConfig:
     """HTTP webhook output configuration."""
+
     enabled: bool = False
-    endpoints: List[str] = None
+    endpoints: list[str] = None
     timeout_seconds: int = 30
     retry_count: int = 3
-    headers: Dict[str, str] = None
+    headers: dict[str, str] = None
 
     def __post_init__(self):
         if self.endpoints is None:
@@ -66,6 +70,7 @@ class HTTPOutputConfig:
 @dataclass
 class WebSocketOutputConfig:
     """WebSocket broadcast configuration."""
+
     enabled: bool = False
     channel_prefix: str = "devices"
 
@@ -73,6 +78,7 @@ class WebSocketOutputConfig:
 @dataclass
 class TimescaleOutputConfig:
     """TimescaleDB output configuration."""
+
     enabled: bool = False
     connection_string: str = "postgresql://localhost/iot"
     table_name: str = "iot_metrics"
@@ -83,6 +89,7 @@ class TimescaleOutputConfig:
 @dataclass
 class OutputBrokerConfig:
     """Complete output broker configuration."""
+
     kafka: KafkaOutputConfig = None
     mqtt: MQTTOutputConfig = None
     http: HTTPOutputConfig = None
@@ -107,13 +114,15 @@ class OutputBrokerConfig:
 # Routing
 # ============================================================================
 
+
 @dataclass
 class OutputRouting:
     """Computed routing for a message."""
-    kafka_topic: Optional[str] = None
-    mqtt_topic: Optional[str] = None
-    http_endpoints: List[str] = None
-    websocket_channel: Optional[str] = None
+
+    kafka_topic: str | None = None
+    mqtt_topic: str | None = None
+    http_endpoints: list[str] = None
+    websocket_channel: str | None = None
     format: str = "json"
 
     def __post_init__(self):
@@ -125,50 +134,31 @@ class TopicMapper:
     """Maps device/context to output topics."""
 
     def __init__(self):
-        self._device_rules: Dict[str, Dict[str, str]] = {}
-        self._context_rules: Dict[str, Dict[str, str]] = {}
+        self._device_rules: dict[str, dict[str, str]] = {}
+        self._context_rules: dict[str, dict[str, str]] = {}
 
     def add_device_rule(
-        self,
-        device_pattern: str,
-        kafka_topic: Optional[str] = None,
-        mqtt_topic: Optional[str] = None
+        self, device_pattern: str, kafka_topic: str | None = None, mqtt_topic: str | None = None
     ) -> None:
         """Add routing rule for device pattern."""
-        self._device_rules[device_pattern] = {
-            "kafka": kafka_topic,
-            "mqtt": mqtt_topic
-        }
+        self._device_rules[device_pattern] = {"kafka": kafka_topic, "mqtt": mqtt_topic}
 
     def add_context_rule(
-        self,
-        context: str,
-        kafka_topic: Optional[str] = None,
-        mqtt_topic: Optional[str] = None
+        self, context: str, kafka_topic: str | None = None, mqtt_topic: str | None = None
     ) -> None:
         """Add routing rule for device context."""
-        self._context_rules[context] = {
-            "kafka": kafka_topic,
-            "mqtt": mqtt_topic
-        }
+        self._context_rules[context] = {"kafka": kafka_topic, "mqtt": mqtt_topic}
 
-    def get_kafka_topic(
-        self,
-        device_id: str,
-        context: Optional[str],
-        default_prefix: str
-    ) -> str:
+    def get_kafka_topic(self, device_id: str, context: str | None, default_prefix: str) -> str:
         """Determine Kafka topic for message."""
         # Check device rules
         for pattern, rules in self._device_rules.items():
-            if pattern in device_id:
-                if rules.get("kafka"):
-                    return rules["kafka"]
+            if pattern in device_id and rules.get("kafka"):
+                return rules["kafka"]
 
         # Check context rules
-        if context and context in self._context_rules:
-            if self._context_rules[context].get("kafka"):
-                return self._context_rules[context]["kafka"]
+        if context and context in self._context_rules and self._context_rules[context].get("kafka"):
+            return self._context_rules[context]["kafka"]
 
         # Default: use context-based topic
         suffix = context.replace(" ", "_").lower() if context else "general"
@@ -177,15 +167,14 @@ class TopicMapper:
     def get_mqtt_topic(
         self,
         device_id: str,
-        context: Optional[str],
-        default_prefix: str
+        context: str | None,  # noqa: ARG002
+        default_prefix: str,
     ) -> str:
         """Determine MQTT topic for message."""
         # Check device rules
         for pattern, rules in self._device_rules.items():
-            if pattern in device_id:
-                if rules.get("mqtt"):
-                    return rules["mqtt"]
+            if pattern in device_id and rules.get("mqtt"):
+                return rules["mqtt"]
 
         # Default: device-based topic
         return f"{default_prefix}/{device_id}"
@@ -195,11 +184,13 @@ class TopicMapper:
 # Publish Result
 # ============================================================================
 
+
 @dataclass
 class PublishResult:
     """Result of publishing a message."""
+
     message_id: str
-    outputs: List[Tuple[str, bool]]
+    outputs: list[tuple[str, bool]]
     published_at: datetime
 
     @property
@@ -217,11 +208,12 @@ class PublishResult:
 # WebSocket Manager
 # ============================================================================
 
+
 class WebSocketManager:
     """Manages WebSocket connections and broadcasting."""
 
     def __init__(self):
-        self._connections: Dict[str, Set] = {}  # channel -> set of websockets
+        self._connections: dict[str, set] = {}  # channel -> set of websockets
 
     def subscribe(self, channel: str, websocket) -> None:
         """Subscribe a websocket to a channel."""
@@ -262,12 +254,13 @@ class WebSocketManager:
 # Output Broker
 # ============================================================================
 
+
 class OutputBroker:
     """
     Routes normalized messages to configured output destinations.
     """
 
-    def __init__(self, config: Optional[OutputBrokerConfig] = None):
+    def __init__(self, config: OutputBrokerConfig | None = None):
         self.config = config or OutputBrokerConfig()
 
         self._kafka_producer = None
@@ -275,8 +268,8 @@ class OutputBroker:
         self._http_session = None
         self._websocket_manager = WebSocketManager()
         self._timescale_pool = None
-        self._timescale_buffer: List[Dict] = []
-        self._timescale_task: Optional[asyncio.Task] = None
+        self._timescale_buffer: list[dict] = []
+        self._timescale_task: asyncio.Task | None = None
 
         self.topic_mapper = TopicMapper()
 
@@ -309,10 +302,8 @@ class OutputBroker:
 
         if self._timescale_task:
             self._timescale_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._timescale_task
-            except asyncio.CancelledError:
-                pass
 
         if self._timescale_pool:
             await self._timescale_pool.close()
@@ -330,7 +321,7 @@ class OutputBroker:
                 compression_type=self.config.kafka.compression_type,
                 batch_size=self.config.kafka.batch_size,
                 linger_ms=self.config.kafka.linger_ms,
-                value_serializer=lambda v: v  # We'll serialize ourselves
+                value_serializer=lambda v: v,  # We'll serialize ourselves
             )
             logger.info("Kafka producer initialized")
         except ImportError:
@@ -349,13 +340,11 @@ class OutputBroker:
 
             if self.config.mqtt.username:
                 self._mqtt_client.username_pw_set(
-                    self.config.mqtt.username,
-                    self.config.mqtt.password
+                    self.config.mqtt.username, self.config.mqtt.password
                 )
 
             self._mqtt_client.connect_async(
-                self.config.mqtt.broker_host,
-                self.config.mqtt.broker_port
+                self.config.mqtt.broker_host, self.config.mqtt.broker_port
             )
             self._mqtt_client.loop_start()
             logger.info("MQTT client initialized")
@@ -372,8 +361,7 @@ class OutputBroker:
             import httpx
 
             self._http_session = httpx.AsyncClient(
-                timeout=self.config.http.timeout_seconds,
-                headers=self.config.http.headers
+                timeout=self.config.http.timeout_seconds, headers=self.config.http.headers
             )
             logger.info("HTTP client initialized")
         except ImportError:
@@ -389,9 +377,7 @@ class OutputBroker:
             import asyncpg
 
             self._timescale_pool = await asyncpg.create_pool(
-                self.config.timescale.connection_string,
-                min_size=1,
-                max_size=10
+                self.config.timescale.connection_string, min_size=1, max_size=10
             )
 
             # Start flush task
@@ -428,8 +414,7 @@ class OutputBroker:
                     (time, device_id, metric, value)
                     VALUES ($1, $2, $3, $4)
                     """,
-                    [(m["time"], m["device_id"], m["metric"], m["value"])
-                     for m in buffer]
+                    [(m["time"], m["device_id"], m["metric"], m["value"]) for m in buffer],
                 )
             logger.debug("Flushed metrics to TimescaleDB", count=len(buffer))
         except Exception as e:
@@ -441,7 +426,7 @@ class OutputBroker:
         """
         Route and publish a normalized message to all configured outputs.
         """
-        results: List[Tuple[str, bool]] = []
+        results: list[tuple[str, bool]] = []
 
         # Compute routing
         routing = self._compute_routing(message)
@@ -464,10 +449,7 @@ class OutputBroker:
                 results.append(("http", result))
 
         if self.config.websocket.enabled and routing.websocket_channel:
-            result = await self._websocket_broadcast(
-                routing.websocket_channel,
-                formatted
-            )
+            result = await self._websocket_broadcast(routing.websocket_channel, formatted)
             results.append(("websocket", result))
 
         if self.config.timescale.enabled:
@@ -475,9 +457,7 @@ class OutputBroker:
             results.append(("timescale", result))
 
         return PublishResult(
-            message_id=message.message_id,
-            outputs=results,
-            published_at=datetime.utcnow()
+            message_id=message.message_id, outputs=results, published_at=datetime.utcnow()
         )
 
     def _compute_routing(self, message: NormalizedMessage) -> OutputRouting:
@@ -486,23 +466,21 @@ class OutputBroker:
 
         if self.config.kafka.enabled:
             routing.kafka_topic = self.topic_mapper.get_kafka_topic(
-                message.device_id,
-                message.context,
-                self.config.kafka.topic_prefix
+                message.device_id, message.context, self.config.kafka.topic_prefix
             )
 
         if self.config.mqtt.enabled:
             routing.mqtt_topic = self.topic_mapper.get_mqtt_topic(
-                message.device_id,
-                message.context,
-                self.config.mqtt.topic_prefix
+                message.device_id, message.context, self.config.mqtt.topic_prefix
             )
 
         if self.config.http.enabled:
             routing.http_endpoints = self.config.http.endpoints.copy()
 
         if self.config.websocket.enabled:
-            routing.websocket_channel = f"{self.config.websocket.channel_prefix}/{message.device_id}"
+            routing.websocket_channel = (
+                f"{self.config.websocket.channel_prefix}/{message.device_id}"
+            )
 
         return routing
 
@@ -511,10 +489,7 @@ class OutputBroker:
         if format == "json-ld":
             return self._to_jsonld(message).encode()
         else:
-            return json.dumps(
-                message.model_dump(),
-                default=str
-            ).encode()
+            return json.dumps(message.model_dump(), default=str).encode()
 
     def _to_jsonld(self, message: NormalizedMessage) -> str:
         """Convert message to JSON-LD format."""
@@ -522,23 +497,18 @@ class OutputBroker:
             "@context": {
                 "@vocab": "https://schema.org/",
                 "iot": "https://www.w3.org/2019/wot/td#",
-                "sosa": "http://www.w3.org/ns/sosa/"
+                "sosa": "http://www.w3.org/ns/sosa/",
             },
             "@type": "sosa:Observation",
             "@id": f"urn:polyglotlink:message:{message.message_id}",
             "sosa:hasFeatureOfInterest": {
                 "@type": "iot:Thing",
                 "@id": f"urn:polyglotlink:device:{message.device_id}",
-                "name": message.device_id
+                "name": message.device_id,
             },
             "sosa:resultTime": message.timestamp.isoformat(),
-            "sosa:hasResult": {
-                "@type": "sosa:Result",
-                **message.data
-            },
-            "iot:hasSecurityScheme": {
-                "scheme": "nosec"
-            }
+            "sosa:hasResult": {"@type": "sosa:Result", **message.data},
+            "iot:hasSecurityScheme": {"scheme": "nosec"},
         }
 
         if message.context:
@@ -556,15 +526,10 @@ class OutputBroker:
         """Publish to Kafka topic."""
         try:
             future = self._kafka_producer.send(
-                topic,
-                value=payload,
-                timestamp_ms=int(datetime.utcnow().timestamp() * 1000)
+                topic, value=payload, timestamp_ms=int(datetime.utcnow().timestamp() * 1000)
             )
             # Wait for send to complete
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: future.get(timeout=10)
-            )
+            await asyncio.get_event_loop().run_in_executor(None, lambda: future.get(timeout=10))
             return True
         except Exception as e:
             logger.error("Kafka publish failed", topic=topic, error=str(e))
@@ -574,10 +539,7 @@ class OutputBroker:
         """Publish to MQTT topic."""
         try:
             result = self._mqtt_client.publish(
-                topic,
-                payload,
-                qos=self.config.mqtt.qos,
-                retain=self.config.mqtt.retain
+                topic, payload, qos=self.config.mqtt.qos, retain=self.config.mqtt.retain
             )
             # Check if publish was successful
             return result.rc == 0
@@ -590,28 +552,19 @@ class OutputBroker:
         for attempt in range(self.config.http.retry_count):
             try:
                 response = await self._http_session.post(
-                    endpoint,
-                    content=payload,
-                    headers={"Content-Type": "application/json"}
+                    endpoint, content=payload, headers={"Content-Type": "application/json"}
                 )
                 return response.status_code < 400
             except Exception as e:
                 logger.warning(
-                    "HTTP post failed",
-                    endpoint=endpoint,
-                    attempt=attempt + 1,
-                    error=str(e)
+                    "HTTP post failed", endpoint=endpoint, attempt=attempt + 1, error=str(e)
                 )
                 if attempt < self.config.http.retry_count - 1:
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    await asyncio.sleep(2**attempt)  # Exponential backoff
 
         return False
 
-    async def _websocket_broadcast(
-        self,
-        channel: str,
-        payload: bytes
-    ) -> bool:
+    async def _websocket_broadcast(self, channel: str, payload: bytes) -> bool:
         """Broadcast to WebSocket channel."""
         try:
             count = await self._websocket_manager.broadcast(channel, payload)
@@ -626,12 +579,14 @@ class OutputBroker:
             # Extract numeric fields for time-series
             for field, value in message.data.items():
                 if isinstance(value, (int, float)) and not field.startswith("_"):
-                    self._timescale_buffer.append({
-                        "time": message.timestamp,
-                        "device_id": message.device_id,
-                        "metric": field,
-                        "value": float(value)
-                    })
+                    self._timescale_buffer.append(
+                        {
+                            "time": message.timestamp,
+                            "device_id": message.device_id,
+                            "metric": field,
+                            "value": float(value),
+                        }
+                    )
 
             # Flush if buffer is full
             if len(self._timescale_buffer) >= self.config.timescale.batch_size:

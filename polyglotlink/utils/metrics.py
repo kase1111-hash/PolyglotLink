@@ -19,26 +19,26 @@ Usage:
 """
 
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from functools import wraps
-from typing import Any, Callable, Optional
 
 from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
     Counter,
     Gauge,
     Histogram,
     Info,
-    CollectorRegistry,
-    start_http_server,
     generate_latest,
-    CONTENT_TYPE_LATEST,
+    start_http_server,
 )
 
 
 class PolyglotLinkMetrics:
     """Centralized metrics collection for PolyglotLink."""
 
-    def __init__(self, registry: Optional[CollectorRegistry] = None):
+    def __init__(self, registry: CollectorRegistry | None = None):
         self.registry = registry or CollectorRegistry()
         self._setup_metrics()
         self._server_started = False
@@ -215,68 +215,46 @@ class PolyglotLinkMetrics:
 
     def set_app_info(self, version: str, environment: str, **extra):
         """Set application info labels."""
-        self.app_info.info({
-            "version": version,
-            "environment": environment,
-            **extra
-        })
+        self.app_info.info({"version": version, "environment": environment, **extra})
 
     def record_message_received(self, protocol: str, device_type: str = "unknown"):
         """Record a received message."""
-        self.messages_received_total.labels(
-            protocol=protocol,
-            device_type=device_type
-        ).inc()
+        self.messages_received_total.labels(protocol=protocol, device_type=device_type).inc()
 
     def record_message_processed(
         self,
         protocol: str,
         device_type: str = "unknown",
         success: bool = True,
-        error_type: str = ""
+        error_type: str = "",
     ):
         """Record a processed message."""
         if success:
-            self.messages_processed_total.labels(
-                protocol=protocol,
-                device_type=device_type
-            ).inc()
+            self.messages_processed_total.labels(protocol=protocol, device_type=device_type).inc()
         else:
             self.messages_failed_total.labels(
-                protocol=protocol,
-                device_type=device_type,
-                error_type=error_type
+                protocol=protocol, device_type=device_type, error_type=error_type
             ).inc()
 
-    def record_processing_time(
-        self,
-        protocol: str,
-        stage: str,
-        duration_seconds: float
-    ):
+    def record_processing_time(self, protocol: str, stage: str, duration_seconds: float):
         """Record message processing time."""
-        self.message_processing_seconds.labels(
-            protocol=protocol,
-            stage=stage
-        ).observe(duration_seconds)
+        self.message_processing_seconds.labels(protocol=protocol, stage=stage).observe(
+            duration_seconds
+        )
 
     def record_schema_extraction(self, payload_type: str, duration_seconds: float):
         """Record schema extraction time."""
-        self.schema_extraction_seconds.labels(
-            payload_type=payload_type
-        ).observe(duration_seconds)
+        self.schema_extraction_seconds.labels(payload_type=payload_type).observe(duration_seconds)
 
     def record_semantic_translation(self, method: str, duration_seconds: float):
         """Record semantic translation time."""
-        self.semantic_translation_seconds.labels(
-            method=method
-        ).observe(duration_seconds)
+        self.semantic_translation_seconds.labels(method=method).observe(duration_seconds)
 
     def record_normalization(self, has_conversions: bool, duration_seconds: float):
         """Record normalization time."""
-        self.normalization_seconds.labels(
-            has_conversions=str(has_conversions).lower()
-        ).observe(duration_seconds)
+        self.normalization_seconds.labels(has_conversions=str(has_conversions).lower()).observe(
+            duration_seconds
+        )
 
     def record_cache_access(self, cache_type: str, hit: bool):
         """Record cache hit or miss."""
@@ -295,7 +273,7 @@ class PolyglotLinkMetrics:
         success: bool,
         duration_seconds: float,
         input_tokens: int = 0,
-        output_tokens: int = 0
+        output_tokens: int = 0,
     ):
         """Record LLM API request."""
         status = "success" if success else "error"
@@ -303,41 +281,22 @@ class PolyglotLinkMetrics:
         self.llm_request_seconds.labels(model=model).observe(duration_seconds)
 
         if input_tokens > 0:
-            self.llm_tokens_total.labels(
-                model=model,
-                token_type="input"
-            ).inc(input_tokens)
+            self.llm_tokens_total.labels(model=model, token_type="input").inc(input_tokens)
 
         if output_tokens > 0:
-            self.llm_tokens_total.labels(
-                model=model,
-                token_type="output"
-            ).inc(output_tokens)
+            self.llm_tokens_total.labels(model=model, token_type="output").inc(output_tokens)
 
-    def record_output(
-        self,
-        destination: str,
-        success: bool,
-        bytes_sent: int = 0
-    ):
+    def record_output(self, destination: str, success: bool, bytes_sent: int = 0):
         """Record output message."""
         status = "success" if success else "error"
-        self.output_messages_total.labels(
-            destination=destination,
-            status=status
-        ).inc()
+        self.output_messages_total.labels(destination=destination, status=status).inc()
 
         if bytes_sent > 0:
-            self.output_bytes_total.labels(
-                destination=destination
-            ).inc(bytes_sent)
+            self.output_bytes_total.labels(destination=destination).inc(bytes_sent)
 
     def record_error(self, error_type: str, component: str):
         """Record an error."""
-        self.errors_total.labels(
-            error_type=error_type,
-            component=component
-        ).inc()
+        self.errors_total.labels(error_type=error_type, component=component).inc()
 
     def set_active_connections(self, protocol: str, count: int):
         """Set active connection count."""
@@ -352,7 +311,7 @@ class PolyglotLinkMetrics:
         self.unique_devices.labels(protocol=protocol).set(count)
 
     @contextmanager
-    def time_operation(self, operation: str, labels: Optional[dict] = None):
+    def time_operation(self, operation: str, labels: dict | None = None):
         """Context manager for timing operations."""
         start = time.perf_counter()
         try:
@@ -372,12 +331,15 @@ class PolyglotLinkMetrics:
 
     def timed(self, operation: str):
         """Decorator for timing functions."""
+
         def decorator(func: Callable) -> Callable:
             @wraps(func)
             def wrapper(*args, **kwargs):
                 with self.time_operation(operation):
                     return func(*args, **kwargs)
+
             return wrapper
+
         return decorator
 
     def start_server(self, port: int = 9090, addr: str = ""):

@@ -5,10 +5,11 @@ These tests verify the complete system behavior from an end-user perspective,
 ensuring the application meets its acceptance criteria and specification.
 """
 
+import contextlib
 import json
-import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from polyglotlink.models.schemas import (
     NormalizedMessage,
@@ -16,19 +17,19 @@ from polyglotlink.models.schemas import (
     Protocol,
     RawMessage,
 )
-from polyglotlink.modules.schema_extractor import SchemaExtractor
-from polyglotlink.modules.semantic_translator_agent import SemanticTranslator
 from polyglotlink.modules.normalization_engine import NormalizationEngine
 from polyglotlink.modules.protocol_listener import (
     detect_encoding,
     extract_device_id,
     generate_uuid,
 )
+from polyglotlink.modules.schema_extractor import SchemaExtractor
+from polyglotlink.modules.semantic_translator_agent import SemanticTranslator
 from polyglotlink.utils.config import Settings, get_settings
 from polyglotlink.utils.validation import (
+    is_valid_topic,
     sanitize_string,
     validate_json_payload,
-    is_valid_topic,
 )
 
 
@@ -45,7 +46,7 @@ class TestAcceptanceCriteria:
         }
 
     @pytest.mark.asyncio
-    async def test_ac1_multi_protocol_message_ingestion(self, pipeline_components):
+    async def test_ac1_multi_protocol_message_ingestion(self, pipeline_components):  # noqa: ARG002
         """
         AC1: System shall ingest messages from MQTT, CoAP, Modbus, OPC-UA,
         HTTP, and WebSocket protocols.
@@ -85,14 +86,14 @@ class TestAcceptanceCriteria:
         extractor = pipeline_components["extractor"]
 
         # Test with unknown/new payload structure
-        payload = json.dumps({
-            "custom_sensor_reading": 123.45,
-            "proprietary_status": "active",
-            "vendor_timestamp": "2024-01-15T10:30:00Z",
-            "nested": {
-                "custom_value": 99
+        payload = json.dumps(
+            {
+                "custom_sensor_reading": 123.45,
+                "proprietary_status": "active",
+                "vendor_timestamp": "2024-01-15T10:30:00Z",
+                "nested": {"custom_value": 99},
             }
-        }).encode()
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -125,11 +126,13 @@ class TestAcceptanceCriteria:
         translator = pipeline_components["translator"]
 
         # Device uses non-standard field names
-        payload = json.dumps({
-            "temp_celsius": 23.5,
-            "rh_percent": 65,
-            "press_hpa": 1013.25,
-        }).encode()
+        payload = json.dumps(
+            {
+                "temp_celsius": 23.5,
+                "rh_percent": 65,
+                "press_hpa": 1013.25,
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -158,10 +161,12 @@ class TestAcceptanceCriteria:
         normalizer = pipeline_components["normalizer"]
 
         # Temperature in Fahrenheit
-        payload = json.dumps({
-            "temperature_f": 77.0,  # 25°C
-            "speed_mph": 60,  # ~96.5 km/h
-        }).encode()
+        payload = json.dumps(
+            {
+                "temperature_f": 77.0,  # 25°C
+                "speed_mph": 60,  # ~96.5 km/h
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -194,12 +199,14 @@ class TestAcceptanceCriteria:
         translator = pipeline_components["translator"]
         normalizer = pipeline_components["normalizer"]
 
-        payload = json.dumps({
-            "temperature": 23.5,
-            "humidity": 65,
-            "device_id": "sensor-001",
-            "timestamp": "2024-01-15T10:30:00Z"
-        }).encode()
+        payload = json.dumps(
+            {
+                "temperature": 23.5,
+                "humidity": 65,
+                "device_id": "sensor-001",
+                "timestamp": "2024-01-15T10:30:00Z",
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -295,8 +302,7 @@ class TestSystemBehavior:
     def test_encoding_auto_detection(self):
         """System should auto-detect payload encoding."""
         json_payload = b'{"key": "value"}'
-        xml_payload = b'<root><key>value</key></root>'
-        cbor_payload = bytes([0xa1, 0x63, 0x6b, 0x65, 0x79])  # CBOR map
+        xml_payload = b"<root><key>value</key></root>"
 
         assert detect_encoding(json_payload) == PayloadEncoding.JSON
         assert detect_encoding(xml_payload) == PayloadEncoding.XML
@@ -310,7 +316,7 @@ class TestSystemBehavior:
             ("building/floor1/room1/sensor", "sensor"),
         ]
 
-        for topic, expected in patterns:
+        for topic, _expected in patterns:
             result = extract_device_id(topic)
             assert result is not None
 
@@ -425,11 +431,9 @@ class TestErrorHandling:
         )
 
         # Should handle without crashing
-        try:
-            schema = extractor.extract_schema(raw)
-        except Exception:
+        with contextlib.suppress(Exception):
             # Acceptable for binary that can't be parsed
-            pass
+            extractor.extract_schema(raw)
 
 
 class TestPerformanceCharacteristics:
@@ -443,10 +447,16 @@ class TestPerformanceCharacteristics:
         """Schema extraction should complete quickly."""
         import time
 
-        payload = json.dumps({
-            "field1": 1, "field2": 2, "field3": 3,
-            "field4": 4, "field5": 5, "field6": 6,
-        }).encode()
+        payload = json.dumps(
+            {
+                "field1": 1,
+                "field2": 2,
+                "field3": 3,
+                "field4": 4,
+                "field5": 5,
+                "field6": 6,
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -489,7 +499,7 @@ class TestPerformanceCharacteristics:
         """System should handle deeply nested payloads."""
         # Create nested structure
         nested = {"value": 42}
-        for i in range(10):
+        for _i in range(10):
             nested = {"level": nested}
 
         payload = json.dumps(nested).encode()
@@ -518,11 +528,7 @@ class TestRegressionSuite:
 
     def test_numeric_string_detection(self, extractor):
         """Regression: Numeric strings should be detected correctly."""
-        payload = json.dumps({
-            "port": "8080",
-            "version": "1.2.3",
-            "count": "42"
-        }).encode()
+        payload = json.dumps({"port": "8080", "version": "1.2.3", "count": "42"}).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -542,11 +548,13 @@ class TestRegressionSuite:
 
     def test_timestamp_field_detection(self, extractor):
         """Regression: Timestamp fields should be detected."""
-        payload = json.dumps({
-            "timestamp": "2024-01-15T10:30:00Z",
-            "created_at": "2024-01-15T10:30:00Z",
-            "ts": 1705312200000,
-        }).encode()
+        payload = json.dumps(
+            {
+                "timestamp": "2024-01-15T10:30:00Z",
+                "created_at": "2024-01-15T10:30:00Z",
+                "ts": 1705312200000,
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -565,11 +573,13 @@ class TestRegressionSuite:
 
     def test_identifier_field_detection(self, extractor):
         """Regression: Identifier fields should be detected."""
-        payload = json.dumps({
-            "device_id": "sensor-001",
-            "sensor_id": "temp-001",
-            "id": "12345",
-        }).encode()
+        payload = json.dumps(
+            {
+                "device_id": "sensor-001",
+                "sensor_id": "temp-001",
+                "id": "12345",
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -588,10 +598,12 @@ class TestRegressionSuite:
 
     def test_array_payload_handling(self, extractor):
         """Regression: Array payloads should be handled."""
-        payload = json.dumps([
-            {"id": 1, "value": 10},
-            {"id": 2, "value": 20},
-        ]).encode()
+        payload = json.dumps(
+            [
+                {"id": 1, "value": 10},
+                {"id": 2, "value": 20},
+            ]
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
@@ -608,11 +620,13 @@ class TestRegressionSuite:
 
     def test_special_characters_in_values(self, extractor):
         """Regression: Special characters in values should be handled."""
-        payload = json.dumps({
-            "message": "Hello, World! 你好",
-            "path": "/usr/local/bin",
-            "emoji": "🌡️",
-        }).encode()
+        payload = json.dumps(
+            {
+                "message": "Hello, World! 你好",
+                "path": "/usr/local/bin",
+                "emoji": "🌡️",
+            }
+        ).encode()
 
         raw = RawMessage(
             message_id="test-001",
