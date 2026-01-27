@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/polyglotlink/polyglotlink#readme
+    about: Check the documentation for answers to common questions
+  - name: FAQ
+    url: https://github.com/polyglotlink/polyglotlink/blob/main/docs/FAQ.md
+    about: Frequently asked questions
+  - name: Troubleshooting Guide
+    url: https://github.com/polyglotlink/polyglotlink/blob/main/docs/TROUBLESHOOTING.md
+    about: Common issues and solutions
