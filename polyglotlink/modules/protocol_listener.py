@@ -265,11 +265,15 @@ class MQTTHandler(BaseProtocolHandler):
         self.config = config
         self._client = None
         self._task: asyncio.Task | None = None
+        self._event_loop: asyncio.AbstractEventLoop | None = None
 
     async def start(self) -> None:
         """Start MQTT listener."""
         try:
             import paho.mqtt.client as mqtt
+
+            # Store the event loop reference for thread-safe callback handling
+            self._event_loop = asyncio.get_running_loop()
 
             self._client = mqtt.Client(client_id=self.config.client_id, protocol=mqtt.MQTTv311)
 
@@ -332,8 +336,11 @@ class MQTTHandler(BaseProtocolHandler):
                 },
             )
 
-            # Use thread-safe method to add to queue
-            asyncio.run_coroutine_threadsafe(self.emit_message(raw), asyncio.get_event_loop())
+            # Use thread-safe method to add to queue with stored event loop reference
+            if self._event_loop is not None:
+                asyncio.run_coroutine_threadsafe(self.emit_message(raw), self._event_loop)
+            else:
+                logger.warning("Event loop not available, message dropped")
         except Exception as e:
             logger.error("Error processing MQTT message", error=str(e))
 
