@@ -282,7 +282,10 @@ class EmbeddingResolver:
                 response = await self.openai.embeddings.create(
                     model=self.embedding_model, input=text
                 )
-                return response.data[0].embedding
+                if response.data and len(response.data) > 0:
+                    return response.data[0].embedding
+                logger.warning("OpenAI embedding returned empty response")
+                return None
             except Exception as e:
                 logger.warning("OpenAI embedding failed", error=str(e))
 
@@ -489,7 +492,10 @@ class LLMTranslator:
                         temperature=self.config.llm_temperature,
                         max_tokens=self.config.llm_max_tokens,
                     )
-                    return response.choices[0].message.content
+                    if response.choices and len(response.choices) > 0:
+                        return response.choices[0].message.content
+                    logger.warning("LLM returned empty choices")
+                    return None
                 except Exception as e:
                     logger.warning("LLM call failed", attempt=attempt + 1, error=str(e))
                     if attempt == self.config.max_llm_retries - 1:

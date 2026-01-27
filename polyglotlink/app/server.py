@@ -285,9 +285,10 @@ class PolyglotLinkServer:
         # Step 4: Publish to outputs
         if self._output_broker:
             result = await self._output_broker.publish(normalized)
+            output_names = [o[0] for o in result.outputs] if result.outputs else []
             logger.debug(
                 "Message published",
-                outputs=[o[0] for o in result.outputs],
+                outputs=output_names,
                 success=result.success,
             )
 

@@ -5,6 +5,8 @@ This module normalizes semantic mappings into standardized messages,
 handling unit conversions, type enforcement, and value validation.
 """
 
+import ast
+import operator
 import re
 from datetime import datetime
 from typing import Any
@@ -112,14 +114,84 @@ class ConversionError(Exception):
     pass
 
 
+class SafeExpressionEvaluator:
+    """
+    Safe expression evaluator using AST that only allows basic arithmetic.
+    Replaces unsafe eval() with a restricted evaluator.
+    """
+
+    # Supported operators for safe evaluation
+    OPERATORS = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.USub: operator.neg,
+        ast.UAdd: operator.pos,
+    }
+
+    def __init__(self, variables: dict[str, float]):
+        self.variables = variables
+
+    def evaluate(self, expression: str) -> float:
+        """Safely evaluate an arithmetic expression."""
+        try:
+            tree = ast.parse(expression, mode='eval')
+            return self._eval_node(tree.body)
+        except (SyntaxError, TypeError, KeyError) as e:
+            raise ConversionError(f"Invalid expression: {e}")
+
+    def _eval_node(self, node: ast.expr) -> float:
+        """Recursively evaluate an AST node."""
+        if isinstance(node, ast.Constant):
+            # Python 3.8+ uses ast.Constant for numbers
+            if isinstance(node.value, (int, float)):
+                return float(node.value)
+            raise UnsafeFormulaError(f"Unsupported constant type: {type(node.value)}")
+
+        elif isinstance(node, ast.Num):
+            # Python 3.7 compatibility (deprecated but may still appear)
+            return float(node.n)
+
+        elif isinstance(node, ast.Name):
+            # Variable reference (e.g., 'value')
+            if node.id in self.variables:
+                return self.variables[node.id]
+            raise UnsafeFormulaError(f"Unknown variable: {node.id}")
+
+        elif isinstance(node, ast.BinOp):
+            # Binary operations (+, -, *, /)
+            op_type = type(node.op)
+            if op_type not in self.OPERATORS:
+                raise UnsafeFormulaError(f"Unsupported operator: {op_type.__name__}")
+            left = self._eval_node(node.left)
+            right = self._eval_node(node.right)
+            return self.OPERATORS[op_type](left, right)
+
+        elif isinstance(node, ast.UnaryOp):
+            # Unary operations (+, -)
+            op_type = type(node.op)
+            if op_type not in self.OPERATORS:
+                raise UnsafeFormulaError(f"Unsupported unary operator: {op_type.__name__}")
+            operand = self._eval_node(node.operand)
+            return self.OPERATORS[op_type](operand)
+
+        elif isinstance(node, ast.Expression):
+            return self._eval_node(node.body)
+
+        else:
+            raise UnsafeFormulaError(f"Unsupported expression type: {type(node).__name__}")
+
+
 def apply_conversion(value: Any, formula: str) -> float:
     """
-    Safely execute unit conversion formula.
+    Safely execute unit conversion formula using AST-based evaluation.
+    Only allows basic arithmetic operations (+, -, *, /) and the 'value' variable.
     """
     if value is None:
         return None
 
-    # Validate formula (only allow safe operations)
+    # Validate formula (only allow safe characters)
     allowed_tokens = set("value0123456789.+-*/() ")
     if not all(c in allowed_tokens for c in formula):
         raise UnsafeFormulaError(f"Unsafe characters in formula: {formula}")
@@ -129,9 +201,11 @@ def apply_conversion(value: Any, formula: str) -> float:
         raise UnsafeFormulaError(f"Function calls not allowed in formula: {formula}")
 
     try:
-        # Execute in restricted environment
-        result = eval(formula, {"__builtins__": {}}, {"value": float(value)})
+        evaluator = SafeExpressionEvaluator({"value": float(value)})
+        result = evaluator.evaluate(formula)
         return round(result, 6)  # Limit precision
+    except (UnsafeFormulaError, ConversionError):
+        raise
     except Exception as e:
         raise ConversionError(f"Conversion failed: {e}")
 
