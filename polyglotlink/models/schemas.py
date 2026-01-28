@@ -265,7 +265,7 @@ class CoAPConfig(BaseModel):
     """CoAP listener configuration."""
 
     enabled: bool = True
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # nosec B104 - binding to all interfaces is intentional for server
     port: int = 5683
 
 
@@ -301,7 +301,7 @@ class HTTPConfig(BaseModel):
     """HTTP webhook listener configuration."""
 
     enabled: bool = True
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # nosec B104 - binding to all interfaces is intentional for server
     port: int = 8080
     path_prefix: str = "/ingest"
 
@@ -310,7 +310,7 @@ class WebSocketConfig(BaseModel):
     """WebSocket listener configuration."""
 
     enabled: bool = False
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # nosec B104 - binding to all interfaces is intentional for server
     port: int = 8081
 
 

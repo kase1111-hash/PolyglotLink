@@ -72,7 +72,7 @@ class HTTPListenerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="HTTP_")
 
     enabled: bool = Field(default=True)
-    host: str = Field(default="0.0.0.0")
+    host: str = Field(default="0.0.0.0")  # nosec B104 - intentional for server
     port: int = Field(default=8080, ge=1, le=65535)
     path_prefix: str = Field(default="/ingest")
 
@@ -90,7 +90,7 @@ class CoAPListenerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="COAP_")
 
     enabled: bool = Field(default=True)
-    host: str = Field(default="0.0.0.0")
+    host: str = Field(default="0.0.0.0")  # nosec B104 - intentional for server
     port: int = Field(default=5683, ge=1, le=65535)
 
 
@@ -122,7 +122,7 @@ class WebSocketListenerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="WEBSOCKET_")
 
     enabled: bool = Field(default=True)
-    host: str = Field(default="0.0.0.0")
+    host: str = Field(default="0.0.0.0")  # nosec B104 - intentional for server
     port: int = Field(default=8081, ge=1, le=65535)
 
 

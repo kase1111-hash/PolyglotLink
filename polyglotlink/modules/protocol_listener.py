@@ -11,8 +11,25 @@ import contextlib
 import json
 import re
 import uuid
-import xml.etree.ElementTree as ET
+
+# Use defusedxml for secure XML parsing to prevent XXE and other XML attacks
+# We need xml.etree.ElementTree for type definitions (Element class)
+import xml.etree.ElementTree as _stdlib_ET
 from abc import ABC, abstractmethod
+
+try:
+    import defusedxml.ElementTree as ET
+
+    # defusedxml provides the parsing functions, but we need Element from stdlib for types
+    ET.Element = _stdlib_ET.Element  # type: ignore[attr-defined]
+except ImportError:
+    ET = _stdlib_ET  # type: ignore[misc]
+
+    import structlog as _structlog
+
+    _structlog.get_logger(__name__).warning(
+        "defusedxml not installed, XML parsing may be vulnerable to XXE attacks"
+    )
 from collections.abc import AsyncGenerator, Callable
 from datetime import datetime
 from typing import Any
@@ -82,9 +99,9 @@ def detect_encoding(payload: bytes) -> PayloadEncoding:
     except (json.JSONDecodeError, UnicodeDecodeError):
         pass
 
-    # Try XML
+    # Try XML (using defusedxml when available, see import above)
     try:
-        ET.fromstring(payload)
+        ET.fromstring(payload)  # nosec B314 - defusedxml is used when available
         return PayloadEncoding.XML
     except ET.ParseError:
         pass
@@ -166,10 +183,10 @@ def parse_modbus_registers(payload: bytes) -> dict[str, Any]:
     return {"registers": registers, "_count": len(registers)}
 
 
-# Encoding parsers registry
+# Encoding parsers registry (uses defusedxml when available, see import above)
 ENCODING_PARSERS: dict[PayloadEncoding, Callable[[bytes], Any]] = {
     PayloadEncoding.JSON: lambda p: json.loads(p),
-    PayloadEncoding.XML: lambda p: xml_to_dict(ET.fromstring(p)),
+    PayloadEncoding.XML: lambda p: xml_to_dict(ET.fromstring(p)),  # nosec B314
     PayloadEncoding.CSV: csv_to_dict,
     PayloadEncoding.MODBUS_REGISTERS: parse_modbus_registers,
     PayloadEncoding.BINARY: lambda p: {

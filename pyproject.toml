@@ -42,6 +42,7 @@ dependencies = [
     # Data Formats
     "cbor2>=5.5",
     "xmltodict>=0.13",
+    "defusedxml>=0.7",  # Secure XML parsing
 
     # LLM/Embeddings
     "openai>=1.0",

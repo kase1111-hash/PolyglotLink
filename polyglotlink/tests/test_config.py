@@ -124,7 +124,7 @@ class TestHTTPListenerSettings:
     def test_default_values(self):
         settings = HTTPListenerSettings()
         assert settings.enabled is True
-        assert settings.host == "0.0.0.0"
+        assert settings.host == "0.0.0.0"  # nosec B104 - testing expected default
         assert settings.port == 8080
         assert settings.path_prefix == "/ingest"
 

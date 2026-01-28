@@ -350,7 +350,7 @@ def create_app():
 
 
 async def run_server(
-    host: str = "0.0.0.0",  # noqa: ARG001
+    host: str = "0.0.0.0",  # noqa: ARG001  # nosec B104 - binding to all interfaces is intentional
     port: int = 8080,  # noqa: ARG001
     workers: int = 1,  # noqa: ARG001
     reload: bool = False,  # noqa: ARG001

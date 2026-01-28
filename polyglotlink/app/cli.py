@@ -71,7 +71,7 @@ For more information, visit: https://github.com/polyglotlink/polyglotlink
     serve_parser.add_argument(
         "--host",
         type=str,
-        default="0.0.0.0",
+        default="0.0.0.0",  # nosec B104 - binding to all interfaces is intentional for server
         help="HTTP server host (default: 0.0.0.0)",
     )
     serve_parser.add_argument(
