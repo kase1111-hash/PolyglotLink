@@ -8,6 +8,7 @@ Kafka, MQTT, HTTP webhooks, WebSocket, TimescaleDB, and JSON-LD export.
 import asyncio
 import contextlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -16,6 +17,22 @@ import structlog
 from polyglotlink.models.schemas import NormalizedMessage
 
 logger = structlog.get_logger(__name__)
+
+# Pattern for valid SQL identifiers (table names, column names)
+_SQL_IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _validate_sql_identifier(identifier: str) -> str:
+    """
+    Validate that a string is a safe SQL identifier.
+
+    Raises ValueError if the identifier is invalid.
+    """
+    if not identifier or len(identifier) > 128:
+        raise ValueError(f"Invalid SQL identifier length: {len(identifier) if identifier else 0}")
+    if not _SQL_IDENTIFIER_PATTERN.match(identifier):
+        raise ValueError(f"Invalid SQL identifier: {identifier}")
+    return identifier
 
 
 # ============================================================================
@@ -407,13 +424,15 @@ class OutputBroker:
         self._timescale_buffer = []
 
         try:
+            # Validate table name to prevent SQL injection (table names cannot be parameterized)
+            table_name = _validate_sql_identifier(self.config.timescale.table_name)
             async with self._timescale_pool.acquire() as conn:
                 await conn.executemany(
                     f"""
-                    INSERT INTO {self.config.timescale.table_name}
+                    INSERT INTO {table_name}
                     (time, device_id, metric, value)
                     VALUES ($1, $2, $3, $4)
-                    """,
+                    """,  # nosec B608 - table_name is validated above
                     [(m["time"], m["device_id"], m["metric"], m["value"]) for m in buffer],
                 )
             logger.debug("Flushed metrics to TimescaleDB", count=len(buffer))
