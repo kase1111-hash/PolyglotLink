@@ -65,6 +65,9 @@ dependencies = [
     "httpx>=0.26",
     "pyyaml>=6.0",
     "python-dotenv>=1.0",
+
+    # SDR Signal Processing (required for SDR module)
+    "numpy>=1.21.0",
 ]
 
 [project.optional-dependencies]
@@ -90,6 +93,12 @@ test = [
     "hypothesis>=6.92",
     "locust>=2.20",
     "httpx>=0.26",
+]
+sdr = [
+    # SDR hardware support (optional)
+    "pyrtlsdr>=0.2.93",
+    "scipy>=1.9.0",
+    "matplotlib>=3.5.0",
 ]
 
 [project.scripts]

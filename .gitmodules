@@ -1,0 +1,3 @@
+[submodule "polyglotlink/modules/sdr_module"]
+	path = polyglotlink/modules/sdr_module
+	url = https://github.com/kase1111-hash/SDR.git
