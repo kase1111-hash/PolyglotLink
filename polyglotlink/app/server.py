@@ -149,11 +149,26 @@ class PolyglotLinkServer:
         await self._protocol_listener.start_listeners()
 
     async def _init_schema_extractor(self) -> None:
-        """Initialize schema extractor."""
+        """Initialize schema extractor with Redis-backed cache when available."""
         from polyglotlink.modules.schema_extractor import SchemaCache, SchemaExtractor
 
-        # TODO: Initialize Redis-backed cache if available
-        cache = SchemaCache(ttl_days=30)
+        settings = get_settings()
+        redis_client = None
+        try:
+            import redis
+
+            redis_client = redis.Redis.from_url(
+                settings.redis.url,
+                max_connections=settings.redis.max_connections,
+                decode_responses=True,
+            )
+            redis_client.ping()
+            logger.info("Redis cache connected", url=settings.redis.url)
+        except Exception as e:
+            logger.warning("Redis unavailable, using in-memory cache only", error=str(e))
+            redis_client = None
+
+        cache = SchemaCache(ttl_days=30, redis_client=redis_client)
         self._schema_extractor = SchemaExtractor(cache=cache)
 
     async def _init_semantic_translator(self) -> None:
@@ -318,6 +333,8 @@ def create_app():
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse
 
+    from polyglotlink.api.routes.v1 import router as v1_router
+
     app = FastAPI(
         title="PolyglotLink",
         description="Semantic API Translator for IoT Device Ecosystems",
@@ -326,6 +343,9 @@ def create_app():
 
     # Server instance (will be set on startup)
     app.state.server = None
+
+    # Mount v1 API routes
+    app.include_router(v1_router, prefix="/api/v1", tags=["v1"])
 
     @app.get("/health")
     async def health():

@@ -331,6 +331,58 @@ class SchemaCache:
             self._stats[schema_signature] = {"hits": 0}
         self._stats[schema_signature]["hits"] += 1
 
+    def list_all(self) -> list[dict]:
+        """List all cached schema mappings with metadata."""
+        results = []
+        seen_signatures: set[str] = set()
+
+        # Collect from local cache
+        for cache_key, mapping in self._local_cache.items():
+            sig = cache_key.removeprefix("schema:")
+            # Skip expired entries
+            if datetime.utcnow() - mapping.created_at >= self._ttl:
+                continue
+            hits = self._stats.get(sig, {}).get("hits", 0)
+            results.append({
+                "schema_signature": sig,
+                "field_count": len(mapping.field_mappings),
+                "confidence": mapping.confidence,
+                "source": mapping.source.value,
+                "created_at": mapping.created_at.isoformat(),
+                "hits": hits,
+            })
+            seen_signatures.add(sig)
+
+        # Collect from Redis (keys not already in local cache)
+        if self._redis:
+            try:
+                cursor = 0
+                while True:
+                    cursor, keys = self._redis.scan(cursor, match="schema:*", count=100)
+                    for key in keys:
+                        sig = key.removeprefix("schema:")
+                        if sig not in seen_signatures:
+                            try:
+                                cached = self._redis.get(key)
+                                if cached:
+                                    m = CachedMapping.model_validate_json(cached)
+                                    results.append({
+                                        "schema_signature": sig,
+                                        "field_count": len(m.field_mappings),
+                                        "confidence": m.confidence,
+                                        "source": m.source.value,
+                                        "created_at": m.created_at.isoformat(),
+                                        "hits": 0,
+                                    })
+                            except Exception:
+                                pass
+                    if cursor == 0:
+                        break
+            except Exception as e:
+                logger.warning("Redis scan failed", error=str(e))
+
+        return results
+
 
 # ============================================================================
 # Schema Extractor
