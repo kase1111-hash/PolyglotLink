@@ -111,6 +111,9 @@ testpaths = ["polyglotlink/tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+markers = [
+    "integration: tests requiring real Redis/MQTT services (deselect with '-m \"not integration\"')",
+]
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]

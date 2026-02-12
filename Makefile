@@ -51,11 +51,11 @@ install-all: ## Install all dependencies including optional ones
 # Testing
 #-------------------------------------------------------------------------------
 
-test: ## Run all tests
-	$(PYTEST) $(PROJECT_NAME)/tests/ -v
+test: ## Run all tests (excludes live integration tests)
+	$(PYTEST) $(PROJECT_NAME)/tests/ -v -m "not integration" --ignore=$(PROJECT_NAME)/tests/test_integration_live.py
 
 test-unit: ## Run unit tests only
-	$(PYTEST) $(PROJECT_NAME)/tests/ -v -m "not integration" --ignore=$(PROJECT_NAME)/tests/test_integration.py
+	$(PYTEST) $(PROJECT_NAME)/tests/ -v -m "not integration" --ignore=$(PROJECT_NAME)/tests/test_integration.py --ignore=$(PROJECT_NAME)/tests/test_integration_live.py
 
 test-integration: ## Run integration tests only
 	$(PYTEST) $(PROJECT_NAME)/tests/test_integration.py -v
@@ -65,6 +65,13 @@ test-cov: ## Run tests with coverage report
 
 test-fast: ## Run tests in parallel (requires pytest-xdist)
 	$(PYTEST) $(PROJECT_NAME)/tests/ -v -n auto
+
+test-live: ## Run integration tests against real Redis + Mosquitto
+	docker compose -f docker-compose.test.yml up -d --wait
+	$(PYTEST) $(PROJECT_NAME)/tests/test_integration_live.py -v --timeout=60; \
+	status=$$?; \
+	docker compose -f docker-compose.test.yml down; \
+	exit $$status
 
 test-watch: ## Run tests in watch mode (requires pytest-watch)
 	ptw $(PROJECT_NAME)/tests/ -- -v
