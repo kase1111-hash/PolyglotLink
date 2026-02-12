@@ -333,6 +333,8 @@ def create_app():
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse
 
+    from polyglotlink.api.routes.v1 import router as v1_router
+
     app = FastAPI(
         title="PolyglotLink",
         description="Semantic API Translator for IoT Device Ecosystems",
@@ -341,6 +343,9 @@ def create_app():
 
     # Server instance (will be set on startup)
     app.state.server = None
+
+    # Mount v1 API routes
+    app.include_router(v1_router, prefix="/api/v1", tags=["v1"])
 
     @app.get("/health")
     async def health():
