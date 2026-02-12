@@ -135,24 +135,6 @@ class RedisSettings(BaseSettings):
     max_connections: int = Field(default=10, ge=1, le=100)
 
 
-class Neo4jSettings(BaseSettings):
-    """Neo4j configuration."""
-
-    model_config = SettingsConfigDict(env_prefix="NEO4J_")
-
-    uri: str = Field(default="neo4j://localhost:7687")
-    user: str = Field(default="neo4j")
-    password: str = Field(default="polyglotlink")
-
-
-class WeaviateSettings(BaseSettings):
-    """Weaviate configuration."""
-
-    model_config = SettingsConfigDict(env_prefix="WEAVIATE_")
-
-    url: str = Field(default="http://localhost:8085")
-
-
 class TimescaleSettings(BaseSettings):
     """TimescaleDB configuration."""
 
@@ -184,16 +166,6 @@ class MetricsSettings(BaseSettings):
     port: int = Field(default=9090, ge=1, le=65535)
 
 
-class SentrySettings(BaseSettings):
-    """Sentry error tracking configuration."""
-
-    model_config = SettingsConfigDict(env_prefix="SENTRY_")
-
-    dsn: str | None = Field(default=None)
-    environment: str = Field(default="development")
-    traces_sample_rate: float = Field(default=0.1, ge=0.0, le=1.0)
-
-
 class Settings(BaseSettings):
     """Main application settings."""
 
@@ -217,12 +189,9 @@ class Settings(BaseSettings):
     opcua: OPCUAListenerSettings = Field(default_factory=OPCUAListenerSettings)
     websocket: WebSocketListenerSettings = Field(default_factory=WebSocketListenerSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
-    neo4j: Neo4jSettings = Field(default_factory=Neo4jSettings)
-    weaviate: WeaviateSettings = Field(default_factory=WeaviateSettings)
     timescale: TimescaleSettings = Field(default_factory=TimescaleSettings)
     kafka: KafkaOutputSettings = Field(default_factory=KafkaOutputSettings)
     metrics: MetricsSettings = Field(default_factory=MetricsSettings)
-    sentry: SentrySettings = Field(default_factory=SentrySettings)
 
     @field_validator("log_level")
     @classmethod

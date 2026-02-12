@@ -19,10 +19,6 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - MQTT_BROKER_HOST=mosquitto
       - MQTT_BROKER_PORT=1883
-      - NEO4J_URI=neo4j://neo4j:7687
-      - NEO4J_USER=neo4j
-      - NEO4J_PASSWORD=polyglotlink
-      - WEAVIATE_URL=http://weaviate:8080
       - TIMESCALE_URL=postgresql://postgres:postgres@timescaledb:5432/iot
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     depends_on:
@@ -105,46 +101,6 @@ services:
     networks:
       - polyglotlink-network
 
-  # Neo4j Graph Database (Ontology)
-  neo4j:
-    image: neo4j:5-community
-    container_name: polyglotlink-neo4j
-    restart: unless-stopped
-    ports:
-      - "7474:7474"  # HTTP
-      - "7687:7687"  # Bolt
-    environment:
-      NEO4J_AUTH: neo4j/polyglotlink
-      NEO4J_PLUGINS: '["apoc"]'
-    volumes:
-      - neo4j-data:/data
-      - neo4j-logs:/logs
-    networks:
-      - polyglotlink-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7474"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  # Weaviate Vector Database
-  weaviate:
-    image: semitechnologies/weaviate:1.23.0
-    container_name: polyglotlink-weaviate
-    restart: unless-stopped
-    ports:
-      - "8085:8080"
-    environment:
-      QUERY_DEFAULTS_LIMIT: 25
-      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
-      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
-      DEFAULT_VECTORIZER_MODULE: 'none'
-      CLUSTER_HOSTNAME: 'node1'
-    volumes:
-      - weaviate-data:/var/lib/weaviate
-    networks:
-      - polyglotlink-network
-
   # TimescaleDB (Time-series)
   timescaledb:
     image: timescale/timescaledb:latest-pg15
@@ -178,7 +134,4 @@ volumes:
   zookeeper-data:
   zookeeper-log:
   kafka-data:
-  neo4j-data:
-  neo4j-logs:
-  weaviate-data:
   timescale-data:

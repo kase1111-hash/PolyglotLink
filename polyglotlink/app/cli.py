@@ -281,8 +281,6 @@ def cmd_check(args: argparse.Namespace) -> int:
     # Check storage
     print("Storage:")
     print(f"  Redis: {settings.redis.url}")
-    print(f"  Neo4j: {settings.neo4j.uri}")
-    print(f"  Weaviate: {settings.weaviate.url}")
     print(
         f"  TimescaleDB: {settings.timescale.url.split('@')[-1] if '@' in settings.timescale.url else settings.timescale.url}"
     )

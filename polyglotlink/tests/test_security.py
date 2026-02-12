@@ -239,7 +239,6 @@ class TestConfigurationSecurity:
         """Sensitive configuration values should not appear in string representation."""
         settings = Settings(
             openai_api_key="sk-secret-key-12345",
-            sentry_dsn="https://secret@sentry.io/123",
         )
 
         settings_str = str(settings)

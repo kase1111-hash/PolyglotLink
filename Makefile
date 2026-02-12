@@ -224,55 +224,6 @@ ci-all: ci-lint ci-test ## Run all CI checks
 	@echo "$(GREEN)All CI checks passed!$(NC)"
 
 #-------------------------------------------------------------------------------
-# Release
-#-------------------------------------------------------------------------------
-
-release-patch: ## Create a patch release (x.x.X)
-	@echo "$(BLUE)Creating patch release...$(NC)"
-	bump2version patch
-	@echo "$(GREEN)Patch release created!$(NC)"
-
-release-minor: ## Create a minor release (x.X.0)
-	@echo "$(BLUE)Creating minor release...$(NC)"
-	bump2version minor
-	@echo "$(GREEN)Minor release created!$(NC)"
-
-release-major: ## Create a major release (X.0.0)
-	@echo "$(BLUE)Creating major release...$(NC)"
-	bump2version major
-	@echo "$(GREEN)Major release created!$(NC)"
-
-#-------------------------------------------------------------------------------
-# Deployment
-#-------------------------------------------------------------------------------
-
-deploy-dev: ## Deploy to development environment
-	@echo "$(BLUE)Deploying to development...$(NC)"
-	./scripts/deploy.sh development deploy
-
-deploy-staging: ## Deploy to staging environment
-	@echo "$(BLUE)Deploying to staging...$(NC)"
-	./scripts/deploy.sh staging deploy
-
-deploy-prod: ## Deploy to production environment
-	@echo "$(YELLOW)Deploying to production...$(NC)"
-	./scripts/deploy.sh production deploy
-
-rollback-staging: ## Rollback staging deployment
-	@echo "$(YELLOW)Rolling back staging...$(NC)"
-	./scripts/deploy.sh staging rollback
-
-rollback-prod: ## Rollback production deployment
-	@echo "$(RED)Rolling back production...$(NC)"
-	./scripts/deploy.sh production rollback
-
-deploy-status: ## Check deployment status
-	./scripts/deploy.sh $(ENV) status
-
-deploy-logs: ## View deployment logs
-	./scripts/deploy.sh $(ENV) logs
-
-#-------------------------------------------------------------------------------
 # Load Testing
 #-------------------------------------------------------------------------------
 
