@@ -46,7 +46,6 @@ from polyglotlink.models.schemas import (
     Protocol,
     ProtocolListenerConfig,
     RawMessage,
-    SDRConfig,
     WebSocketConfig,
 )
 
@@ -822,18 +821,6 @@ class ProtocolListener:
             handler = WebSocketHandler(self.config.websocket)
             await handler.start()
             self._handlers.append(handler)
-
-        if self.config.sdr.enabled:
-            try:
-                from polyglotlink.modules.sdr_handler import SDRHandler
-
-                sdr_handler = SDRHandler(self.config.sdr)
-                await sdr_handler.start()
-                self._handlers.append(sdr_handler)  # type: ignore[arg-type]
-            except ImportError:
-                logger.warning("SDR handler not available")
-            except Exception as e:
-                logger.error("Failed to start SDR handler", error=str(e))
 
         self._running = True
         logger.info("Protocol listener started", handlers=len(self._handlers))

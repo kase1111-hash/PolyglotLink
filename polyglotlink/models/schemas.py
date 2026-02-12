@@ -25,7 +25,6 @@ class Protocol(str, Enum):
     OPCUA = "OPC-UA"
     HTTP = "HTTP"
     WEBSOCKET = "WebSocket"
-    SDR = "SDR"  # Software Defined Radio
 
 
 class PayloadEncoding(str, Enum):
@@ -38,14 +37,6 @@ class PayloadEncoding(str, Enum):
     PROTOBUF = "protobuf"
     MODBUS_REGISTERS = "modbus_registers"
     BINARY = "binary"
-    # SDR protocol decodings
-    SDR_ADSB = "sdr_adsb"
-    SDR_POCSAG = "sdr_pocsag"
-    SDR_APRS = "sdr_aprs"
-    SDR_ACARS = "sdr_acars"
-    SDR_RDS = "sdr_rds"
-    SDR_FLEX = "sdr_flex"
-    SDR_IQ = "sdr_iq"
 
 
 class ResolutionMethod(str, Enum):
@@ -323,47 +314,6 @@ class WebSocketConfig(BaseModel):
     port: int = 8081
 
 
-class SDRDeviceConfig(BaseModel):
-    """Configuration for a single SDR device."""
-
-    device_type: str = "rtlsdr"  # "rtlsdr" or "hackrf"
-    frequency_hz: float = 433.92e6  # Default to 433.92 MHz (ISM band)
-    sample_rate: int = 2_400_000  # 2.4 MHz default
-    gain: float = 40.0  # dB
-    ppm_correction: int = 0
-    agc_enabled: bool = True
-
-
-class SDRDecoderConfig(BaseModel):
-    """Configuration for SDR protocol decoders."""
-
-    adsb_enabled: bool = False  # ADS-B aircraft tracking (1090 MHz)
-    adsb_frequency: float = 1090e6
-    pocsag_enabled: bool = False  # Pager decoding
-    pocsag_frequency: float = 152.84e6
-    aprs_enabled: bool = False  # Amateur packet radio
-    aprs_frequency: float = 144.39e6
-    acars_enabled: bool = False  # Aircraft communications
-    acars_frequencies: list[float] = Field(default_factory=lambda: [129.125e6, 130.025e6])
-    rds_enabled: bool = False  # FM broadcast RDS
-    flex_enabled: bool = False  # FLEX pager
-    custom_frequency: float | None = None  # Custom frequency for raw IQ
-
-
-class SDRConfig(BaseModel):
-    """SDR (Software Defined Radio) listener configuration."""
-
-    enabled: bool = False
-    rtlsdr: SDRDeviceConfig = Field(default_factory=SDRDeviceConfig)
-    hackrf: SDRDeviceConfig = Field(
-        default_factory=lambda: SDRDeviceConfig(device_type="hackrf", sample_rate=8_000_000)
-    )
-    decoders: SDRDecoderConfig = Field(default_factory=SDRDecoderConfig)
-    buffer_size: int = 262144  # IQ sample buffer size
-    spectrum_enabled: bool = True  # Enable spectrum analysis
-    signal_classification: bool = True  # Auto-classify detected signals
-
-
 class ProtocolListenerConfig(BaseModel):
     """Complete protocol listener configuration."""
 
@@ -373,7 +323,6 @@ class ProtocolListenerConfig(BaseModel):
     opcua: OPCUAConfig = Field(default_factory=OPCUAConfig)
     http: HTTPConfig = Field(default_factory=HTTPConfig)
     websocket: WebSocketConfig = Field(default_factory=WebSocketConfig)
-    sdr: SDRConfig = Field(default_factory=SDRConfig)
 
 
 class SchemaExtractorConfig(BaseModel):
