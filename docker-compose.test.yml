@@ -1,0 +1,30 @@
+version: '3.8'
+
+# Minimal services for integration testing.
+# No Kafka, no TimescaleDB — just what the pipeline needs.
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: polyglotlink-test-redis
+    ports:
+      - "6399:6379"
+    command: redis-server --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: polyglotlink-test-mosquitto
+    ports:
+      - "1893:1883"
+    volumes:
+      - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -W 3 || exit 0"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
