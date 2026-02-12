@@ -348,6 +348,142 @@ class TestSchemaCache:
         result = cache.get("nonexistent")
         assert result is None
 
+    def test_redis_set_calls_setex(self):
+        """When Redis client is provided, set() should persist to Redis."""
+        from datetime import timedelta
+        from unittest.mock import MagicMock
+
+        from polyglotlink.models.schemas import CachedMapping, MappingSource
+
+        mock_redis = MagicMock()
+        cache = SchemaCache(ttl_days=7, redis_client=mock_redis)
+
+        mapping = CachedMapping(
+            schema_signature="redis-test",
+            field_mappings=[],
+            confidence=0.9,
+            created_at=datetime.utcnow(),
+            source=MappingSource.LLM,
+            hit_count=0,
+        )
+
+        cache.set("redis-test", mapping)
+
+        # Verify Redis setex was called with correct key and TTL
+        mock_redis.setex.assert_called_once()
+        call_args = mock_redis.setex.call_args
+        assert call_args[0][0] == "schema:redis-test"
+        assert call_args[0][1] == timedelta(days=7)
+        # Third arg is the serialized JSON
+        assert "redis-test" in call_args[0][2]
+
+    def test_redis_get_fallback(self):
+        """When local cache misses, get() should try Redis."""
+        from unittest.mock import MagicMock
+
+        from polyglotlink.models.schemas import CachedMapping, MappingSource
+
+        mapping = CachedMapping(
+            schema_signature="fallback-test",
+            field_mappings=[],
+            confidence=0.88,
+            created_at=datetime.utcnow(),
+            source=MappingSource.LEARNED,
+            hit_count=0,
+        )
+
+        mock_redis = MagicMock()
+        mock_redis.get.return_value = mapping.model_dump_json()
+
+        cache = SchemaCache(ttl_days=30, redis_client=mock_redis)
+
+        # Don't pre-populate local cache — force Redis fallback
+        result = cache.get("fallback-test")
+
+        mock_redis.get.assert_called_once_with("schema:fallback-test")
+        assert result is not None
+        assert result.schema_signature == "fallback-test"
+        assert result.confidence == 0.88
+
+    def test_redis_get_populates_local_cache(self):
+        """Redis hit should be promoted to local cache for next lookup."""
+        from unittest.mock import MagicMock
+
+        from polyglotlink.models.schemas import CachedMapping, MappingSource
+
+        mapping = CachedMapping(
+            schema_signature="promote-test",
+            field_mappings=[],
+            confidence=0.75,
+            created_at=datetime.utcnow(),
+            source=MappingSource.MANUAL,
+            hit_count=0,
+        )
+
+        mock_redis = MagicMock()
+        mock_redis.get.return_value = mapping.model_dump_json()
+
+        cache = SchemaCache(ttl_days=30, redis_client=mock_redis)
+
+        # First call goes to Redis
+        cache.get("promote-test")
+        assert mock_redis.get.call_count == 1
+
+        # Second call should hit local cache — Redis NOT called again
+        result = cache.get("promote-test")
+        assert mock_redis.get.call_count == 1  # still 1
+        assert result is not None
+        assert result.schema_signature == "promote-test"
+
+    def test_redis_failure_degrades_gracefully(self):
+        """If Redis raises, cache should fall back to local-only."""
+        from unittest.mock import MagicMock
+
+        from polyglotlink.models.schemas import CachedMapping, MappingSource
+
+        mock_redis = MagicMock()
+        mock_redis.get.side_effect = ConnectionError("Redis down")
+        mock_redis.setex.side_effect = ConnectionError("Redis down")
+
+        cache = SchemaCache(ttl_days=30, redis_client=mock_redis)
+
+        mapping = CachedMapping(
+            schema_signature="fail-test",
+            field_mappings=[],
+            confidence=0.8,
+            created_at=datetime.utcnow(),
+            source=MappingSource.LLM,
+            hit_count=0,
+        )
+
+        # set() should not raise even when Redis is down
+        cache.set("fail-test", mapping)
+
+        # get() from local cache should still work
+        result = cache.get("fail-test")
+        assert result is not None
+        assert result.schema_signature == "fail-test"
+
+    def test_no_redis_works_normally(self):
+        """When redis_client=None, cache works as pure in-memory."""
+        from polyglotlink.models.schemas import CachedMapping, MappingSource
+
+        cache = SchemaCache(ttl_days=30, redis_client=None)
+
+        mapping = CachedMapping(
+            schema_signature="memory-only",
+            field_mappings=[],
+            confidence=0.95,
+            created_at=datetime.utcnow(),
+            source=MappingSource.LLM,
+            hit_count=0,
+        )
+
+        cache.set("memory-only", mapping)
+        result = cache.get("memory-only")
+        assert result is not None
+        assert result.confidence == 0.95
+
 
 class TestSchemaExtractor:
     """Tests for the SchemaExtractor class."""
