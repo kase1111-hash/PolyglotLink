@@ -180,6 +180,9 @@ run: ## Run the application
 dev: ## Run in development mode with auto-reload
 	$(PYTHON) -m $(PROJECT_NAME).app.main serve --verbose
 
+demo: ## Run end-to-end demo with 3 sample IoT payloads
+	$(PYTHON) scripts/demo.py
+
 check: ## Run health check
 	$(PYTHON) -m $(PROJECT_NAME).app.main check
 
