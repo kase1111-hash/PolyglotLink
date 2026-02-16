@@ -3,7 +3,7 @@ Pytest configuration and shared fixtures.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import pytest
@@ -58,7 +58,7 @@ def sample_raw_message(sample_json_payload) -> RawMessage:
         topic="sensors/sensor-001/telemetry",
         payload_raw=sample_json_payload,
         payload_encoding=PayloadEncoding.JSON,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         metadata={"broker": "localhost"},
     )
 
@@ -125,7 +125,7 @@ def sample_extracted_schema(sample_extracted_fields) -> ExtractedSchema:
             "device_id": "sensor-001",
             "timestamp": "2024-01-15T10:30:00Z",
         },
-        extracted_at=datetime.utcnow(),
+        extracted_at=datetime.now(timezone.utc),
     )
 
 
@@ -181,7 +181,7 @@ def sample_semantic_mapping(sample_field_mappings) -> SemanticMapping:
         device_context="Environmental sensor",
         confidence=0.93,
         llm_generated=False,
-        translated_at=datetime.utcnow(),
+        translated_at=datetime.now(timezone.utc),
     )
 
 

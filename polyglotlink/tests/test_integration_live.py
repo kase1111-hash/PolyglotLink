@@ -19,6 +19,7 @@ import asyncio
 import json
 import os
 import time
+from datetime import datetime, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -178,7 +179,7 @@ class TestMQTTEndToEnd:
             topic="sensors/mqtt-e2e/telemetry",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=__import__("datetime").datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         extractor = SchemaExtractor()
@@ -233,7 +234,7 @@ class TestRedisPersistence:
             topic="api/test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=__import__("datetime").datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -383,7 +384,7 @@ class TestSchemaReuse:
             schema_signature="reuse-redis-test",
             field_mappings=[],
             confidence=0.93,
-            created_at=__import__("datetime").datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             source=MappingSource.LEARNED,
             hit_count=0,
         )

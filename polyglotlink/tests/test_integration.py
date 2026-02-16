@@ -6,7 +6,7 @@ from raw message ingestion through normalization and output.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -67,7 +67,7 @@ class TestEndToEndPipeline:
             topic="sensors/env-sensor-001/telemetry",
             payload_raw=payload,
             payload_encoding=detect_encoding(payload),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Step 2: Extract schema
@@ -133,7 +133,7 @@ class TestEndToEndPipeline:
             topic="/api/meters/power-meter-001/readings",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = schema_extractor.extract_schema(raw)
@@ -174,7 +174,7 @@ class TestEndToEndPipeline:
             topic="trackers/tracker-001/location",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = schema_extractor.extract_schema(raw)
@@ -215,7 +215,7 @@ class TestEndToEndPipeline:
             topic="sensors/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = schema_extractor.extract_schema(raw)
@@ -276,7 +276,7 @@ class TestSchemaExtractorIntegration:
             topic="test",
             payload_raw=b"{}",
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -292,7 +292,7 @@ class TestSchemaExtractorIntegration:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -309,7 +309,7 @@ class TestSchemaExtractorIntegration:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -329,7 +329,7 @@ class TestSchemaExtractorIntegration:
             topic="test",
             payload_raw=payload1,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         raw2 = RawMessage(
@@ -339,7 +339,7 @@ class TestSchemaExtractorIntegration:
             topic="test",
             payload_raw=payload2,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema1 = extractor.extract_schema(raw1)
@@ -387,7 +387,7 @@ class TestNormalizationIntegration:
             topic="sensors/thermo-001/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -419,7 +419,7 @@ class TestNormalizationIntegration:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -468,7 +468,7 @@ class TestValidationIntegration:
             topic="sensors/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -496,7 +496,7 @@ class TestValidationIntegration:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)

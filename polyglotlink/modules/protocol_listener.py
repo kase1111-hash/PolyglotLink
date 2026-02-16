@@ -31,7 +31,7 @@ except ImportError:
         "defusedxml not installed, XML parsing may be vulnerable to XXE attacks"
     )
 from collections.abc import AsyncGenerator, Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -115,25 +115,30 @@ def detect_encoding(payload: bytes) -> PayloadEncoding:
     except Exception:
         pass
 
-    # Try Protobuf (heuristic)
-    if is_likely_protobuf(payload):
-        return PayloadEncoding.PROTOBUF
-
-    # Try CSV
+    # Try CSV (check before protobuf since CSV is text-based and more reliably detected)
     if is_likely_csv(payload):
         return PayloadEncoding.CSV
 
-    # Check for Modbus register format
-    if len(payload) % 2 == 0 and len(payload) > 0:
-        # Could be Modbus registers (16-bit values)
-        return PayloadEncoding.MODBUS_REGISTERS
+    # Try Protobuf (heuristic — only if payload looks non-textual)
+    if is_likely_protobuf(payload):
+        try:
+            payload.decode("utf-8")
+            # If it's valid UTF-8 text, it's probably not protobuf
+        except UnicodeDecodeError:
+            return PayloadEncoding.PROTOBUF
 
-    # Binary fallback
+    # Binary fallback — Modbus registers are not auto-detected from raw bytes
+    # because any even-length binary payload would false-positive. Modbus data
+    # should arrive through the ModbusHandler which explicitly sets the encoding.
     return PayloadEncoding.BINARY
 
 
 def xml_to_dict(element: ET.Element) -> dict[str, Any]:
-    """Convert XML element to dictionary."""
+    """Convert XML element to dictionary.
+
+    Always returns a dict. Leaf text nodes are wrapped as {"_value": text}
+    when the element also has attributes, or stored directly as child values.
+    """
     result: dict[str, Any] = {}
 
     # Add attributes
@@ -142,8 +147,9 @@ def xml_to_dict(element: ET.Element) -> dict[str, Any]:
 
     # Add text content
     if element.text and element.text.strip():
-        if len(element) == 0:
-            return element.text.strip()
+        if len(element) == 0 and not element.attrib:
+            # Pure leaf element — wrap in a dict to maintain consistent return type
+            return {"_value": element.text.strip()}
         result["#text"] = element.text.strip()
 
     # Add children
@@ -346,7 +352,7 @@ class MQTTHandler(BaseProtocolHandler):
                 payload_encoding=detect_encoding(msg.payload),
                 qos=msg.qos,
                 retained=msg.retain,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 metadata={
                     "broker": self.config.broker_host,
                     "topic_pattern": self._get_matching_pattern(msg.topic),
@@ -368,13 +374,33 @@ class MQTTHandler(BaseProtocolHandler):
 
     def _get_matching_pattern(self, topic: str) -> str | None:
         """Find which subscription pattern matched this topic."""
-        import fnmatch
-
         for pattern in self.config.topic_patterns:
-            mqtt_pattern = pattern.replace("+", "*").replace("#", "**")
-            if fnmatch.fnmatch(topic, mqtt_pattern):
+            if self._mqtt_topic_matches(pattern, topic):
                 return pattern
         return None
+
+    @staticmethod
+    def _mqtt_topic_matches(pattern: str, topic: str) -> bool:
+        """Check if an MQTT topic matches a subscription pattern.
+
+        MQTT wildcards:
+        - '+' matches exactly one level
+        - '#' matches zero or more levels (must be last)
+        """
+        pattern_parts = pattern.split("/")
+        topic_parts = topic.split("/")
+
+        for i, part in enumerate(pattern_parts):
+            if part == "#":
+                # '#' matches everything from here onwards
+                return True
+            if i >= len(topic_parts):
+                return False
+            if part != "+" and part != topic_parts[i]:
+                return False
+
+        # All pattern parts matched — topic must also be fully consumed
+        return len(pattern_parts) == len(topic_parts)
 
 
 # ============================================================================
@@ -411,7 +437,7 @@ class HTTPHandler(BaseProtocolHandler):
                     topic=full_path,
                     payload_raw=body,
                     payload_encoding=detect_encoding(body),
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     metadata={
                         "method": request.method,
                         "content_type": request.headers.get("Content-Type"),
@@ -489,7 +515,7 @@ class CoAPHandler(BaseProtocolHandler):
                         topic=path,
                         payload_raw=request.payload,
                         payload_encoding=detect_encoding(request.payload),
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(timezone.utc),
                         metadata={
                             "coap_type": request.mtype.name
                             if hasattr(request.mtype, "name")
@@ -599,7 +625,7 @@ class ModbusHandler(BaseProtocolHandler):
                                 topic=f"modbus/{device.slave_id}/{block.get('start', 0)}",
                                 payload_raw=payload,
                                 payload_encoding=PayloadEncoding.MODBUS_REGISTERS,
-                                timestamp=datetime.utcnow(),
+                                timestamp=datetime.now(timezone.utc),
                                 metadata={
                                     "slave_id": device.slave_id,
                                     "register_start": block.get("start", 0),
@@ -694,7 +720,7 @@ class OPCUAHandler(BaseProtocolHandler):
                         topic=str(node),
                         payload_raw=payload,
                         payload_encoding=PayloadEncoding.JSON,
-                        timestamp=data.monitored_item.Value.SourceTimestamp or datetime.utcnow(),
+                        timestamp=data.monitored_item.Value.SourceTimestamp or datetime.now(timezone.utc),
                         metadata={
                             "node_id": str(node),
                             "status_code": str(data.monitored_item.Value.StatusCode),
@@ -741,7 +767,7 @@ class WebSocketHandler(BaseProtocolHandler):
                             topic=path,
                             payload_raw=payload,
                             payload_encoding=detect_encoding(payload),
-                            timestamp=datetime.utcnow(),
+                            timestamp=datetime.now(timezone.utc),
                             metadata={
                                 "remote_address": str(websocket.remote_address),
                                 "path": path,

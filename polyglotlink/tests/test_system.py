@@ -7,7 +7,7 @@ ensuring the application meets its acceptance criteria and specification.
 
 import contextlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -70,7 +70,7 @@ class TestAcceptanceCriteria:
                 topic=f"/test/{protocol.value}",
                 payload_raw=payload,
                 payload_encoding=PayloadEncoding.JSON,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
             )
 
             # Verify message creation succeeds for all protocols
@@ -102,7 +102,7 @@ class TestAcceptanceCriteria:
             topic="unknown/topic",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Should extract schema without configuration
@@ -141,7 +141,7 @@ class TestAcceptanceCriteria:
             topic="sensors/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -175,7 +175,7 @@ class TestAcceptanceCriteria:
             topic="sensors/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -215,7 +215,7 @@ class TestAcceptanceCriteria:
             topic="sensors/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -247,7 +247,7 @@ class TestAcceptanceCriteria:
             topic="sensors/data",
             payload_raw=payload1,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         raw2 = RawMessage(
@@ -257,7 +257,7 @@ class TestAcceptanceCriteria:
             topic="sensors/data",
             payload_raw=payload2,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema1 = extractor.extract_schema(raw1)
@@ -284,7 +284,7 @@ class TestAcceptanceCriteria:
             topic="sensors/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -391,7 +391,7 @@ class TestErrorHandling:
             topic="test",
             payload_raw=b"{}",
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -407,7 +407,7 @@ class TestErrorHandling:
             topic="test",
             payload_raw=b"{invalid json}",
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Should not crash, should return empty or error schema
@@ -427,7 +427,7 @@ class TestErrorHandling:
             topic="modbus/data",
             payload_raw=b"\x00\x01\x02\x03\x04",
             payload_encoding=PayloadEncoding.BINARY,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Should handle without crashing
@@ -465,7 +465,7 @@ class TestPerformanceCharacteristics:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         start = time.perf_counter()
@@ -489,7 +489,7 @@ class TestPerformanceCharacteristics:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -511,7 +511,7 @@ class TestPerformanceCharacteristics:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -537,7 +537,7 @@ class TestRegressionSuite:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -563,7 +563,7 @@ class TestRegressionSuite:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -588,7 +588,7 @@ class TestRegressionSuite:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -612,7 +612,7 @@ class TestRegressionSuite:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -635,7 +635,7 @@ class TestRegressionSuite:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)

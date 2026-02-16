@@ -8,7 +8,7 @@ Provides consistent, machine-readable logs with context propagation.
 import logging
 import sys
 from contextvars import ContextVar
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -22,7 +22,7 @@ message_id_var: ContextVar[str | None] = ContextVar("message_id", default=None)
 
 def add_timestamp(_logger: logging.Logger, _method_name: str, event_dict: EventDict) -> EventDict:
     """Add ISO format timestamp to log event."""
-    event_dict["timestamp"] = datetime.utcnow().isoformat() + "Z"
+    event_dict["timestamp"] = datetime.now(timezone.utc).isoformat() + "Z"
     return event_dict
 
 
@@ -231,7 +231,7 @@ def log_performance(
         start_time: When the operation started
         **extra: Additional context to log
     """
-    duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+    duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
     logger.info(
         f"{operation} completed", operation=operation, duration_ms=round(duration_ms, 2), **extra
     )
