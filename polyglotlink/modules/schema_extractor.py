@@ -7,7 +7,7 @@ detecting field types, units, and semantic hints.
 
 import hashlib
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import structlog
@@ -293,7 +293,7 @@ class SchemaCache:
         if cache_key in self._local_cache:
             mapping = self._local_cache[cache_key]
             # Check if expired
-            if datetime.utcnow() - mapping.created_at < self._ttl:
+            if datetime.now(timezone.utc) - mapping.created_at < self._ttl:
                 self._update_stats(schema_signature)
                 return mapping
             else:
@@ -321,7 +321,8 @@ class SchemaCache:
         # Persist to Redis if available
         if self._redis:
             try:
-                self._redis.setex(cache_key, self._ttl, mapping.model_dump_json())
+                ttl_seconds = int(self._ttl.total_seconds())
+                self._redis.setex(cache_key, ttl_seconds, mapping.model_dump_json())
             except Exception as e:
                 logger.warning("Redis cache write failed", error=str(e))
 
@@ -340,7 +341,7 @@ class SchemaCache:
         for cache_key, mapping in self._local_cache.items():
             sig = cache_key.removeprefix("schema:")
             # Skip expired entries
-            if datetime.utcnow() - mapping.created_at >= self._ttl:
+            if datetime.now(timezone.utc) - mapping.created_at >= self._ttl:
                 continue
             hits = self._stats.get(sig, {}).get("hits", 0)
             results.append({
@@ -471,7 +472,7 @@ class SchemaExtractor:
             schema_signature=schema_signature,
             cached_mapping=cached_mapping,
             payload_decoded=decoded,
-            extracted_at=datetime.utcnow(),
+            extracted_at=datetime.now(timezone.utc),
         )
 
     def cache_mapping(
@@ -486,7 +487,7 @@ class SchemaExtractor:
             schema_signature=schema_signature,
             field_mappings=field_mappings,
             confidence=confidence,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             source=source,
             hit_count=0,
         )

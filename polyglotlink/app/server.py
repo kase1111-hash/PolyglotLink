@@ -7,7 +7,7 @@ Main server application that orchestrates all components.
 import asyncio
 import contextlib
 import signal
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from polyglotlink.utils.config import get_settings
@@ -53,7 +53,7 @@ class PolyglotLinkServer:
     async def start(self) -> None:
         """Start all server components."""
         logger.info("Starting PolyglotLink server")
-        self._metrics["start_time"] = datetime.utcnow()
+        self._metrics["start_time"] = datetime.now(timezone.utc)
 
         # Initialize components
         await self._init_schema_extractor()
@@ -265,7 +265,7 @@ class PolyglotLinkServer:
 
     async def _process_single_message(self, raw_message) -> None:
         """Process a single message through the pipeline."""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         add_breadcrumb(
             f"Processing message from {raw_message.protocol.value}",
@@ -319,7 +319,7 @@ class PolyglotLinkServer:
         """Get server metrics."""
         uptime = None
         if self._metrics["start_time"]:
-            uptime = (datetime.utcnow() - self._metrics["start_time"]).total_seconds()
+            uptime = (datetime.now(timezone.utc) - self._metrics["start_time"]).total_seconds()
 
         return {
             **self._metrics,
@@ -380,7 +380,7 @@ async def run_server(
     server = PolyglotLinkServer(**kwargs)
 
     # Set up signal handlers
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def signal_handler():
         logger.info("Received shutdown signal")

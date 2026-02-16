@@ -11,7 +11,7 @@ These tests verify security controls for:
 
 import contextlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -174,7 +174,7 @@ class TestSchemaExtractionSecurity:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Should not crash when processing malicious field names
@@ -200,7 +200,7 @@ class TestSchemaExtractionSecurity:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Should handle without crashing
@@ -224,7 +224,7 @@ class TestSchemaExtractionSecurity:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -310,7 +310,7 @@ class TestBufferOverflowPrevention:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Should handle without memory issues
@@ -328,7 +328,7 @@ class TestBufferOverflowPrevention:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Should handle without issues

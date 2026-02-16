@@ -6,7 +6,8 @@ IoT fields to standardized ontology concepts.
 """
 
 import json
-from datetime import datetime
+import re
+from datetime import datetime, timezone
 
 import structlog
 
@@ -289,18 +290,52 @@ class EmbeddingResolver:
             except Exception as e:
                 logger.warning("OpenAI embedding failed", error=str(e))
 
-        # Fallback: simple hash-based pseudo-embedding
-        # This is just for testing without OpenAI
-        import hashlib
+        # Fallback: token-overlap pseudo-embedding for when OpenAI is unavailable.
+        # Uses a bag-of-words approach so that semantically related inputs (sharing
+        # common tokens like "temperature", "celsius") produce similar vectors, unlike
+        # a cryptographic hash which destroys similarity.
+        tokens = set(re.split(r"[\s_\-./]+", text.lower()))
+        # Build a stable vocabulary from the known ontology aliases
+        vocab: list[str] = []
+        for concept in DEFAULT_ONTOLOGY_CONCEPTS:
+            for alias in concept.get("aliases", []):
+                if alias not in vocab:
+                    vocab.append(alias)
+            cid = concept["concept_id"]
+            if cid not in vocab:
+                vocab.append(cid)
+        # Create a sparse vector based on token membership
+        import hashlib as _hl
 
-        hash_bytes = hashlib.sha256(text.encode()).digest()
-        return [float(b) / 255.0 for b in hash_bytes]
+        dim = max(len(vocab), 32)
+        vec = [0.0] * dim
+        for token in tokens:
+            if token in vocab:
+                vec[vocab.index(token)] = 1.0
+            else:
+                # Hash unknown tokens to a stable bucket
+                idx = int(_hl.md5(token.encode()).hexdigest(), 16) % dim  # nosec B324
+                vec[idx] = 0.3
+        # Normalize to unit vector
+        norm = sum(x * x for x in vec) ** 0.5
+        if norm > 0:
+            vec = [x / norm for x in vec]
+        return vec
 
     def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
-        """Compute cosine similarity between two vectors."""
-        dot_product = sum(x * y for x, y in zip(a, b, strict=True))
-        norm_a = sum(x * x for x in a) ** 0.5
-        norm_b = sum(x * x for x in b) ** 0.5
+        """Compute cosine similarity between two vectors.
+
+        Vectors may differ in length when switching between embedding
+        backends (e.g. OpenAI vs. local fallback).  We use the shorter
+        length so that a dimension mismatch degrades gracefully instead
+        of raising a ``ValueError``.
+        """
+        length = min(len(a), len(b))
+        if length == 0:
+            return 0.0
+        dot_product = sum(a[i] * b[i] for i in range(length))
+        norm_a = sum(a[i] * a[i] for i in range(length)) ** 0.5
+        norm_b = sum(b[i] * b[i] for i in range(length)) ** 0.5
         if norm_a == 0 or norm_b == 0:
             return 0.0
         return dot_product / (norm_a * norm_b)
@@ -413,8 +448,8 @@ class LLMTranslator:
             ontology_concepts=build_ontology_context(fields, ontology_concepts),
         )
 
-        # Call LLM
-        response_text = await self._call_llm(prompt)
+        # Call LLM (pass fields for rule-based fallback when LLM is unavailable)
+        response_text = await self._call_llm(prompt, fields=fields)
 
         if not response_text:
             return [], None, []
@@ -475,7 +510,9 @@ class LLMTranslator:
 
         return mappings, device_context, suggested_concepts
 
-    async def _call_llm(self, prompt: str) -> str | None:
+    async def _call_llm(
+        self, prompt: str, fields: list[ExtractedField] | None = None
+    ) -> str | None:
         """Call the configured LLM."""
         if self.openai:
             for attempt in range(self.config.max_llm_retries):
@@ -501,15 +538,59 @@ class LLMTranslator:
                     if attempt == self.config.max_llm_retries - 1:
                         raise
 
-        # Fallback: rule-based translation
-        return self._rule_based_fallback(prompt)
+        # Fallback: rule-based translation using field hints
+        return self._rule_based_fallback(prompt, fields=fields)
 
-    def _rule_based_fallback(self, _prompt: str) -> str:
-        """Simple rule-based fallback when LLM is unavailable."""
-        # This is a simplified fallback that uses the inferred semantics
-        # In production, you'd want a more sophisticated rule engine
+    def _rule_based_fallback(self, _prompt: str, fields: list[ExtractedField] | None = None) -> str:
+        """Rule-based fallback when LLM is unavailable.
+
+        Uses inferred semantic hints and unit patterns from the schema extractor
+        to produce reasonable mappings without an LLM.
+        """
+        if not fields:
+            return json.dumps(
+                {"mappings": [], "device_context": "unknown", "suggested_new_concepts": []}
+            )
+
+        # Build a lookup from semantic hint to ontology concept
+        hint_to_concept: dict[str, dict] = {}
+        for concept in DEFAULT_ONTOLOGY_CONCEPTS:
+            for alias in concept.get("aliases", []):
+                hint_to_concept[alias] = concept
+
+        mappings = []
+        for field in fields:
+            matched_concept = None
+
+            # Try matching via semantic hint
+            if field.inferred_semantic:
+                for alias, concept in hint_to_concept.items():
+                    if alias in field.inferred_semantic.lower() or field.inferred_semantic.lower() in alias:
+                        matched_concept = concept
+                        break
+
+            # Try matching via field key directly
+            if not matched_concept:
+                key_lower = field.key.lower().replace(".", "_")
+                for alias, concept in hint_to_concept.items():
+                    if alias in key_lower:
+                        matched_concept = concept
+                        break
+
+            if matched_concept:
+                mappings.append({
+                    "source_field": field.key,
+                    "target_concept": matched_concept["concept_id"],
+                    "target_field": matched_concept["concept_id"],
+                    "source_unit": field.inferred_unit,
+                    "target_unit": matched_concept["unit"],
+                    "conversion_formula": None,
+                    "confidence": 0.7,
+                    "reasoning": "rule-based fallback (no LLM available)",
+                })
+
         return json.dumps(
-            {"mappings": [], "device_context": "unknown", "suggested_new_concepts": []}
+            {"mappings": mappings, "device_context": "unknown", "suggested_new_concepts": []}
         )
 
 
@@ -608,7 +689,7 @@ class SemanticTranslator:
             device_context=device_context,
             confidence=overall_confidence,
             llm_generated=len(fields_needing_llm) > 0,
-            translated_at=datetime.utcnow(),
+            translated_at=datetime.now(timezone.utc),
         )
 
         logger.info(
@@ -633,7 +714,7 @@ class SemanticTranslator:
             device_context=None,
             confidence=cached.confidence,
             llm_generated=False,
-            translated_at=datetime.utcnow(),
+            translated_at=datetime.now(timezone.utc),
         )
 
     def _create_passthrough_mapping(self, field: ExtractedField) -> FieldMapping:

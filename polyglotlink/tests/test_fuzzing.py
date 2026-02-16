@@ -9,7 +9,7 @@ Run with: pytest polyglotlink/tests/test_fuzzing.py -v
 
 import contextlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 from hypothesis import HealthCheck, assume, given, settings
@@ -104,7 +104,7 @@ class TestSchemaExtractorFuzzing:
             topic="fuzz/test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Should not raise any exception
@@ -130,7 +130,7 @@ class TestSchemaExtractorFuzzing:
             topic="fuzz/test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -149,7 +149,7 @@ class TestSchemaExtractorFuzzing:
             topic="fuzz/test",
             payload_raw=data,
             payload_encoding=PayloadEncoding.BINARY,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Should not crash
@@ -304,7 +304,7 @@ class TestProtocolHandlingFuzzing:
             topic="test/topic",
             payload_raw=b'{"test": 1}',
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
         assert raw.protocol == protocol
 
@@ -326,7 +326,7 @@ class TestEdgeCases:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
         schema = extractor.extract_schema(raw)
         assert schema is not None
@@ -347,7 +347,7 @@ class TestEdgeCases:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
         schema = extractor.extract_schema(raw)
         assert schema is not None
@@ -368,7 +368,7 @@ class TestEdgeCases:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
         schema = extractor.extract_schema(raw)
         assert schema is not None
@@ -390,7 +390,7 @@ class TestEdgeCases:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
         schema = extractor.extract_schema(raw)
         assert schema is not None
@@ -407,7 +407,7 @@ class TestEdgeCases:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
         schema = extractor.extract_schema(raw)
         assert schema is not None
@@ -426,7 +426,7 @@ class TestEdgeCases:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
         schema = extractor.extract_schema(raw)
         assert schema is not None

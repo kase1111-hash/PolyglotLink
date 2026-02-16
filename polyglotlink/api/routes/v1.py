@@ -6,7 +6,7 @@ and testing the pipeline.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -95,7 +95,7 @@ async def _run_pipeline(server, body: IngestRequest, publish: bool) -> IngestRes
         topic=body.topic,
         payload_raw=payload_bytes,
         payload_encoding=PayloadEncoding.JSON,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
     )
 
     # Step 1: Extract schema

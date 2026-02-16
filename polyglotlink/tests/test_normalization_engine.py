@@ -2,7 +2,7 @@
 Unit tests for the Normalization Engine module.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -214,7 +214,7 @@ class TestNormalizationEngine:
             ],
             schema_signature="abc123",
             payload_decoded={"temperature": 23.5, "humidity": 65},
-            extracted_at=datetime.utcnow(),
+            extracted_at=datetime.now(timezone.utc),
         )
 
     @pytest.fixture
@@ -252,7 +252,7 @@ class TestNormalizationEngine:
             ],
             confidence=0.95,
             llm_generated=False,
-            translated_at=datetime.utcnow(),
+            translated_at=datetime.now(timezone.utc),
         )
 
     def test_basic_normalization(self, engine, sample_schema, sample_mapping):
@@ -285,7 +285,7 @@ class TestNormalizationEngine:
             ],
             confidence=0.95,
             llm_generated=True,
-            translated_at=datetime.utcnow(),
+            translated_at=datetime.now(timezone.utc),
         )
 
         result = engine.normalize_message(sample_schema, mapping)
@@ -316,7 +316,7 @@ class TestNormalizationEngine:
             ],
             confidence=0.95,
             llm_generated=False,
-            translated_at=datetime.utcnow(),
+            translated_at=datetime.now(timezone.utc),
         )
 
         result = engine.normalize_message(sample_schema, mapping)
@@ -357,7 +357,7 @@ class TestNormalizationEngine:
             ],
             schema_signature="abc123",
             payload_decoded={"humidity": 150},
-            extracted_at=datetime.utcnow(),
+            extracted_at=datetime.now(timezone.utc),
         )
 
         mapping = SemanticMapping(
@@ -375,7 +375,7 @@ class TestNormalizationEngine:
             ],
             confidence=0.95,
             llm_generated=False,
-            translated_at=datetime.utcnow(),
+            translated_at=datetime.now(timezone.utc),
         )
 
         result = engine.normalize_message(schema, mapping)

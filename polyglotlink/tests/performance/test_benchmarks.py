@@ -10,7 +10,7 @@ Run with: pytest polyglotlink/tests/performance/test_benchmarks.py -v
 import json
 import statistics
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -49,7 +49,7 @@ class TestSchemaExtractorBenchmarks:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Warm-up
@@ -105,7 +105,7 @@ class TestSchemaExtractorBenchmarks:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Benchmark
@@ -139,7 +139,7 @@ class TestSchemaExtractorBenchmarks:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Benchmark
@@ -280,7 +280,7 @@ class TestNormalizationBenchmarks:
             topic="sensors/sensor-001/telemetry",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         extractor = components["extractor"]
@@ -335,7 +335,7 @@ class TestMemoryEfficiency:
             topic="test",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Measure initial memory
@@ -376,7 +376,7 @@ class TestConcurrencyBenchmarks:
                 topic="test",
                 payload_raw=payloads[idx % len(payloads)],
                 payload_encoding=PayloadEncoding.JSON,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
             )
             return extractor.extract_schema(raw)
 

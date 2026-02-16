@@ -3,7 +3,7 @@ Unit tests for the Schema Extractor module.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -331,7 +331,7 @@ class TestSchemaCache:
             schema_signature="test123",
             field_mappings=[],
             confidence=0.95,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             source=MappingSource.LLM,
             hit_count=0,
         )
@@ -362,7 +362,7 @@ class TestSchemaCache:
             schema_signature="redis-test",
             field_mappings=[],
             confidence=0.9,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             source=MappingSource.LLM,
             hit_count=0,
         )
@@ -373,7 +373,7 @@ class TestSchemaCache:
         mock_redis.setex.assert_called_once()
         call_args = mock_redis.setex.call_args
         assert call_args[0][0] == "schema:redis-test"
-        assert call_args[0][1] == timedelta(days=7)
+        assert call_args[0][1] == 7 * 86400  # TTL in seconds
         # Third arg is the serialized JSON
         assert "redis-test" in call_args[0][2]
 
@@ -387,7 +387,7 @@ class TestSchemaCache:
             schema_signature="fallback-test",
             field_mappings=[],
             confidence=0.88,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             source=MappingSource.LEARNED,
             hit_count=0,
         )
@@ -415,7 +415,7 @@ class TestSchemaCache:
             schema_signature="promote-test",
             field_mappings=[],
             confidence=0.75,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             source=MappingSource.MANUAL,
             hit_count=0,
         )
@@ -451,7 +451,7 @@ class TestSchemaCache:
             schema_signature="fail-test",
             field_mappings=[],
             confidence=0.8,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             source=MappingSource.LLM,
             hit_count=0,
         )
@@ -474,7 +474,7 @@ class TestSchemaCache:
             schema_signature="memory-only",
             field_mappings=[],
             confidence=0.95,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             source=MappingSource.LLM,
             hit_count=0,
         )
@@ -504,7 +504,7 @@ class TestSchemaExtractor:
             topic="sensors/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -529,7 +529,7 @@ class TestSchemaExtractor:
             topic="sensors/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -549,7 +549,7 @@ class TestSchemaExtractor:
             topic="sensors/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -570,7 +570,7 @@ class TestSchemaExtractor:
             topic="sensors/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)
@@ -590,7 +590,7 @@ class TestSchemaExtractor:
             topic="sensors/data",
             payload_raw=payload,
             payload_encoding=PayloadEncoding.JSON,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         schema = extractor.extract_schema(raw)

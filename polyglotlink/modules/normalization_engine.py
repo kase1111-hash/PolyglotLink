@@ -8,7 +8,7 @@ handling unit conversions, type enforcement, and value validation.
 import ast
 import operator
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -183,10 +183,11 @@ class SafeExpressionEvaluator:
             raise UnsafeFormulaError(f"Unsupported expression type: {type(node).__name__}")
 
 
-def apply_conversion(value: Any, formula: str) -> float:
+def apply_conversion(value: Any, formula: str) -> float | None:
     """
     Safely execute unit conversion formula using AST-based evaluation.
     Only allows basic arithmetic operations (+, -, *, /) and the 'value' variable.
+    Returns None when value is None.
     """
     if value is None:
         return None
@@ -221,7 +222,7 @@ def enforce_type(value: Any, target_type: str) -> Any:
         return None
 
     try:
-        if target_type == "float":
+        if target_type == "float" or target_type == "numeric_string":
             return float(value)
         elif target_type == "integer":
             return int(float(value))
@@ -242,7 +243,7 @@ def enforce_type(value: Any, target_type: str) -> Any:
                 # Unix timestamp
                 if value > 1e12:
                     value = value / 1000  # Milliseconds to seconds
-                return datetime.fromtimestamp(value)
+                return datetime.fromtimestamp(value, tz=timezone.utc)
         return value
     except (ValueError, TypeError, OSError) as e:
         raise TypeError(f"Cannot convert {type(value).__name__} to {target_type}: {e}")
@@ -448,6 +449,8 @@ class NormalizationEngine:
 
             # Handle null values
             if value is None:
+                if self.config.null_strategy == "omit":
+                    continue
                 normalized_fields[target_field] = self._handle_null(field_mapping.target_concept)
                 continue
 
@@ -544,7 +547,7 @@ class NormalizationEngine:
         return NormalizedMessage(
             message_id=schema.message_id,
             device_id=schema.device_id,
-            timestamp=timestamp or datetime.utcnow(),
+            timestamp=timestamp or datetime.now(timezone.utc),
             data=normalized_fields,
             metadata=metadata,
             context=mapping.device_context,
@@ -552,7 +555,7 @@ class NormalizationEngine:
             confidence=mapping.confidence,
             conversions=conversions_applied,
             validation_errors=validation_errors,
-            normalized_at=datetime.utcnow(),
+            normalized_at=datetime.now(timezone.utc),
         )
 
     def _get_concept(self, concept_id: str) -> Concept | None:
@@ -566,11 +569,14 @@ class NormalizationEngine:
         return DEFAULT_CONSTRAINTS.get(concept_id)
 
     def _handle_null(self, target_concept: str) -> Any:
-        """Handle null values according to configuration."""
+        """Handle null values according to configuration.
+
+        Note: The "omit" strategy is handled by the caller (normalize_message)
+        via an early ``continue`` before this method is reached.  Only
+        "preserve" and "default" should reach here.
+        """
         if self.config.null_strategy == "preserve":
             return None
-        elif self.config.null_strategy == "omit":
-            return None  # Will be filtered out
         elif self.config.null_strategy == "default":
             concept = self._get_concept(target_concept)
             if concept:

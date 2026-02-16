@@ -10,7 +10,7 @@ import contextlib
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 import structlog
 
@@ -420,6 +420,8 @@ class OutputBroker:
         if not self._timescale_buffer or not self._timescale_pool:
             return
 
+        # Atomically swap out the current buffer so new writes go to a fresh list.
+        # On failure, prepend the failed records so ordering is preserved.
         buffer = self._timescale_buffer
         self._timescale_buffer = []
 
@@ -438,8 +440,9 @@ class OutputBroker:
             logger.debug("Flushed metrics to TimescaleDB", count=len(buffer))
         except Exception as e:
             logger.error("Failed to flush to TimescaleDB", error=str(e))
-            # Put failed records back
-            self._timescale_buffer.extend(buffer)
+            # Prepend failed records before any new ones to preserve time ordering
+            buffer.extend(self._timescale_buffer)
+            self._timescale_buffer = buffer
 
     async def publish(self, message: NormalizedMessage) -> PublishResult:
         """
@@ -476,7 +479,7 @@ class OutputBroker:
             results.append(("timescale", result))
 
         return PublishResult(
-            message_id=message.message_id, outputs=results, published_at=datetime.utcnow()
+            message_id=message.message_id, outputs=results, published_at=datetime.now(timezone.utc)
         )
 
     def _compute_routing(self, message: NormalizedMessage) -> OutputRouting:
@@ -545,10 +548,11 @@ class OutputBroker:
         """Publish to Kafka topic."""
         try:
             future = self._kafka_producer.send(
-                topic, value=payload, timestamp_ms=int(datetime.utcnow().timestamp() * 1000)
+                topic, value=payload, timestamp_ms=int(datetime.now(timezone.utc).timestamp() * 1000)
             )
             # Wait for send to complete
-            await asyncio.get_event_loop().run_in_executor(None, lambda: future.get(timeout=10))
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, lambda: future.get(timeout=10))
             return True
         except Exception as e:
             logger.error("Kafka publish failed", topic=topic, error=str(e))
@@ -584,10 +588,14 @@ class OutputBroker:
         return False
 
     async def _websocket_broadcast(self, channel: str, payload: bytes) -> bool:
-        """Broadcast to WebSocket channel."""
+        """Broadcast to WebSocket channel.
+
+        Returns True if broadcast completed without error (even with zero listeners).
+        Zero connected clients is not a failure — it just means nobody is listening yet.
+        """
         try:
-            count = await self._websocket_manager.broadcast(channel, payload)
-            return count > 0
+            await self._websocket_manager.broadcast(channel, payload)
+            return True
         except Exception as e:
             logger.error("WebSocket broadcast failed", channel=channel, error=str(e))
             return False
