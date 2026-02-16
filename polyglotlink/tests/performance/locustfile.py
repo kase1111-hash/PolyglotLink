@@ -19,7 +19,7 @@ Usage:
 
 import random
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from locust import HttpUser, between, events, task
 
@@ -36,7 +36,7 @@ class IoTDevicePayloads:
             "co2_ppm": random.randint(300, 800),
             "voc_index": random.randint(0, 500),
             "device_id": f"env-sensor-{random.randint(1, 1000):04d}",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     @staticmethod
@@ -63,7 +63,7 @@ class IoTDevicePayloads:
             "accuracy": round(random.uniform(1.0, 50.0), 1),
             "satellites": random.randint(4, 12),
             "device_id": f"tracker-{random.randint(1, 2000):04d}",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     @staticmethod
@@ -93,7 +93,7 @@ class IoTDevicePayloads:
                 "pressure": {"value": round(random.uniform(980.0, 1050.0), 2), "unit": "hpa"},
             },
             "meta": {
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "sequence": random.randint(1, 1000000),
             },
         }
@@ -218,7 +218,7 @@ class LargePayloadUser(HttpUser):
                 "value": round(random.uniform(0, 100), 2),
                 "unit": random.choice(["celsius", "percent", "ppm", "hpa"]),
                 "quality": random.choice(["good", "warning", "error"]),
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             for i in range(100)
         }

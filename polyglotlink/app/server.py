@@ -380,7 +380,7 @@ async def run_server(
     server = PolyglotLinkServer(**kwargs)
 
     # Set up signal handlers
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def signal_handler():
         logger.info("Received shutdown signal")

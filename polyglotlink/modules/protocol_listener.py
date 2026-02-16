@@ -133,11 +133,13 @@ def detect_encoding(payload: bytes) -> PayloadEncoding:
     return PayloadEncoding.BINARY
 
 
-def xml_to_dict(element: ET.Element) -> dict[str, Any]:
+def xml_to_dict(element: ET.Element, *, _root: bool = True) -> dict[str, Any] | str:
     """Convert XML element to dictionary.
 
-    Always returns a dict. Leaf text nodes are wrapped as {"_value": text}
-    when the element also has attributes, or stored directly as child values.
+    The public return type is always ``dict`` (enforced for the root element).
+    Internally, pure leaf elements (no children, no attributes) are returned as
+    plain strings so that the parent can store them without an artificial
+    ``_value`` wrapper, keeping flattened field keys clean.
     """
     result: dict[str, Any] = {}
 
@@ -148,13 +150,15 @@ def xml_to_dict(element: ET.Element) -> dict[str, Any]:
     # Add text content
     if element.text and element.text.strip():
         if len(element) == 0 and not element.attrib:
-            # Pure leaf element — wrap in a dict to maintain consistent return type
-            return {"_value": element.text.strip()}
+            # Pure leaf element — return plain text for children; wrap for root.
+            if _root:
+                return {"_value": element.text.strip()}
+            return element.text.strip()
         result["#text"] = element.text.strip()
 
-    # Add children
+    # Add children (pass _root=False so leaves return plain strings)
     for child in element:
-        child_data = xml_to_dict(child)
+        child_data = xml_to_dict(child, _root=False)
         if child.tag in result:
             # Convert to list if multiple children with same tag
             if not isinstance(result[child.tag], list):

@@ -243,7 +243,7 @@ def enforce_type(value: Any, target_type: str) -> Any:
                 # Unix timestamp
                 if value > 1e12:
                     value = value / 1000  # Milliseconds to seconds
-                return datetime.fromtimestamp(value)
+                return datetime.fromtimestamp(value, tz=timezone.utc)
         return value
     except (ValueError, TypeError, OSError) as e:
         raise TypeError(f"Cannot convert {type(value).__name__} to {target_type}: {e}")
@@ -569,11 +569,14 @@ class NormalizationEngine:
         return DEFAULT_CONSTRAINTS.get(concept_id)
 
     def _handle_null(self, target_concept: str) -> Any:
-        """Handle null values according to configuration."""
+        """Handle null values according to configuration.
+
+        Note: The "omit" strategy is handled by the caller (normalize_message)
+        via an early ``continue`` before this method is reached.  Only
+        "preserve" and "default" should reach here.
+        """
         if self.config.null_strategy == "preserve":
             return None
-        elif self.config.null_strategy == "omit":
-            return None  # Will be filtered out
         elif self.config.null_strategy == "default":
             concept = self._get_concept(target_concept)
             if concept:

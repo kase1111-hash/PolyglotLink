@@ -551,7 +551,8 @@ class OutputBroker:
                 topic, value=payload, timestamp_ms=int(datetime.now(timezone.utc).timestamp() * 1000)
             )
             # Wait for send to complete
-            await asyncio.get_event_loop().run_in_executor(None, lambda: future.get(timeout=10))
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, lambda: future.get(timeout=10))
             return True
         except Exception as e:
             logger.error("Kafka publish failed", topic=topic, error=str(e))

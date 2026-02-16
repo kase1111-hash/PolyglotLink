@@ -323,10 +323,19 @@ class EmbeddingResolver:
         return vec
 
     def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
-        """Compute cosine similarity between two vectors."""
-        dot_product = sum(x * y for x, y in zip(a, b, strict=True))
-        norm_a = sum(x * x for x in a) ** 0.5
-        norm_b = sum(x * x for x in b) ** 0.5
+        """Compute cosine similarity between two vectors.
+
+        Vectors may differ in length when switching between embedding
+        backends (e.g. OpenAI vs. local fallback).  We use the shorter
+        length so that a dimension mismatch degrades gracefully instead
+        of raising a ``ValueError``.
+        """
+        length = min(len(a), len(b))
+        if length == 0:
+            return 0.0
+        dot_product = sum(a[i] * b[i] for i in range(length))
+        norm_a = sum(a[i] * a[i] for i in range(length)) ** 0.5
+        norm_b = sum(b[i] * b[i] for i in range(length)) ** 0.5
         if norm_a == 0 or norm_b == 0:
             return 0.0
         return dot_product / (norm_a * norm_b)
