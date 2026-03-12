@@ -7,6 +7,7 @@ IoT fields to standardized ontology concepts.
 
 import json
 import re
+import time
 from datetime import datetime, timezone
 
 import structlog
@@ -178,21 +179,47 @@ DEFAULT_ONTOLOGY_CONCEPTS = [
     },
 ]
 
+# Pre-compute the set of known concept IDs for LLM output validation
+_KNOWN_CONCEPT_IDS = frozenset(c["concept_id"] for c in DEFAULT_ONTOLOGY_CONCEPTS)
+
+
+def _sanitize_prompt_text(text: str, max_length: int = 60) -> str:
+    """Sanitize text before embedding in LLM prompts.
+
+    Strips control characters, non-printable Unicode, and pipe characters
+    that could break Markdown tables or be used for prompt injection.
+    """
+    # Remove control characters and non-printable Unicode
+    sanitized = "".join(
+        c for c in text
+        if c == " " or (c.isprintable() and c not in "|`{}")
+    )
+    # Collapse whitespace
+    sanitized = " ".join(sanitized.split())
+    # Truncate
+    if len(sanitized) > max_length:
+        sanitized = sanitized[: max_length - 3] + "..."
+    return sanitized
+
 
 def build_fields_table(fields: list[ExtractedField]) -> str:
-    """Build a markdown table of fields for the LLM prompt."""
+    """Build a markdown table of fields for the LLM prompt.
+
+    Field names and values are sanitized to prevent prompt injection.
+    """
     rows = ["| Field | Value | Type | Inferred Unit | Semantic Hint |"]
     rows.append("|-------|-------|------|---------------|---------------|")
 
     for field in fields:
-        value_str = str(field.value)
-        if len(value_str) > 30:
-            value_str = value_str[:27] + "..."
+        safe_key = _sanitize_prompt_text(field.key, max_length=60)
+        safe_value = _sanitize_prompt_text(str(field.value), max_length=30)
+        safe_unit = _sanitize_prompt_text(field.inferred_unit or "-", max_length=20)
+        safe_hint = _sanitize_prompt_text(field.inferred_semantic or "-", max_length=30)
 
         rows.append(
-            f"| {field.key} | {value_str} | "
-            f"{field.value_type} | {field.inferred_unit or '-'} | "
-            f"{field.inferred_semantic or '-'} |"
+            f"| {safe_key} | {safe_value} | "
+            f"{field.value_type} | {safe_unit} | "
+            f"{safe_hint} |"
         )
 
     return "\n".join(rows)
@@ -428,6 +455,10 @@ class LLMTranslator:
     def __init__(self, config: SemanticTranslatorConfig, openai_client=None):
         self.config = config
         self.openai = openai_client
+        # LLM call rate limiting (token bucket per minute)
+        self._call_count = 0
+        self._window_start = time.monotonic()
+        self._max_calls_per_minute = getattr(config, "max_llm_calls_per_minute", 60)
 
     async def translate(
         self,
@@ -472,18 +503,41 @@ class LLMTranslator:
                 logger.error("No JSON found in LLM response")
                 return [], None, []
 
-        # Convert to FieldMapping objects
+        # Build set of valid concept IDs (known ontology + passthrough prefixes)
+        valid_concepts = set(_KNOWN_CONCEPT_IDS)
+        if ontology_concepts:
+            valid_concepts.update(c["concept_id"] for c in ontology_concepts)
+
+        # Convert to FieldMapping objects with output validation
         mappings = []
         for m in response.get("mappings", []):
             try:
+                target_concept = m["target_concept"]
+
+                # Validate target_concept against known ontology
+                if (
+                    target_concept not in valid_concepts
+                    and not target_concept.startswith("_")
+                ):
+                    logger.warning(
+                        "LLM returned unknown concept, skipping",
+                        target_concept=target_concept,
+                        source_field=m.get("source_field"),
+                    )
+                    continue
+
+                # Clamp confidence to [0.0, 1.0]
+                raw_confidence = float(m.get("confidence", 0.8))
+                confidence = max(0.0, min(1.0, raw_confidence))
+
                 mapping = FieldMapping(
                     source_field=m["source_field"],
-                    target_concept=m["target_concept"],
+                    target_concept=target_concept,
                     target_field=m["target_field"],
                     source_unit=m.get("source_unit"),
                     target_unit=m.get("target_unit"),
                     conversion_formula=m.get("conversion_formula"),
-                    confidence=float(m.get("confidence", 0.8)),
+                    confidence=confidence,
                     resolution_method=ResolutionMethod.LLM,
                     reasoning=m.get("reasoning"),
                 )
@@ -510,11 +564,37 @@ class LLMTranslator:
 
         return mappings, device_context, suggested_concepts
 
+    def _check_rate_limit(self) -> bool:
+        """Check if LLM calls are within the per-minute rate limit.
+
+        Returns True if a call is allowed, False if rate-limited.
+        """
+        now = time.monotonic()
+        elapsed = now - self._window_start
+        if elapsed >= 60.0:
+            # Reset the window
+            self._call_count = 0
+            self._window_start = now
+
+        if self._call_count >= self._max_calls_per_minute:
+            return False
+
+        self._call_count += 1
+        return True
+
     async def _call_llm(
         self, prompt: str, fields: list[ExtractedField] | None = None
     ) -> str | None:
         """Call the configured LLM."""
         if self.openai:
+            # Enforce rate limit — fall back to rules if exceeded
+            if not self._check_rate_limit():
+                logger.warning(
+                    "LLM rate limit exceeded, using rule-based fallback",
+                    max_per_minute=self._max_calls_per_minute,
+                )
+                return self._rule_based_fallback(prompt, fields=fields)
+
             for attempt in range(self.config.max_llm_retries):
                 try:
                     response = await self.openai.chat.completions.create(
@@ -529,6 +609,17 @@ class LLMTranslator:
                         temperature=self.config.llm_temperature,
                         max_tokens=self.config.llm_max_tokens,
                     )
+
+                    # Log token usage for cost tracking
+                    if hasattr(response, "usage") and response.usage:
+                        logger.info(
+                            "LLM call completed",
+                            model=self.config.llm_model,
+                            total_tokens=response.usage.total_tokens,
+                            prompt_tokens=response.usage.prompt_tokens,
+                            completion_tokens=response.usage.completion_tokens,
+                        )
+
                     if response.choices and len(response.choices) > 0:
                         return response.choices[0].message.content
                     logger.warning("LLM returned empty choices")

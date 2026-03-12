@@ -9,10 +9,14 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from polyglotlink.utils.validation import validate_json_depth, validate_json_size
+
 router = APIRouter()
+_logger = structlog.get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +83,29 @@ def _get_server(request: Request):
     if server is None:
         raise HTTPException(status_code=503, detail="Server not initialized")
     return server
+
+
+def _validate_payload(payload: dict[str, Any], request: Request) -> None:
+    """Validate ingest payload against configured limits.
+
+    Raises HTTPException(400) on validation failure.
+    """
+    settings = getattr(request.app.state, "settings", None)
+    max_depth = settings.security.max_json_depth if settings else 50
+
+    try:
+        validate_json_depth(payload, max_depth=max_depth)
+        validate_json_size(payload)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Payload validation failed: {e}")
+
+
+def _safe_error_detail(request: Request, exc: Exception) -> str:
+    """Return error detail appropriate for the environment."""
+    settings = getattr(request.app.state, "settings", None)
+    if settings and settings.is_development:
+        return str(exc)
+    return "Processing failed"
 
 
 async def _run_pipeline(server, body: IngestRequest, publish: bool) -> IngestResponse:
@@ -172,13 +199,15 @@ async def ingest(request: Request, body: IngestRequest, publish: bool = Query(de
     Set ?publish=false to process without sending to output brokers.
     """
     server = _get_server(request)
+    _validate_payload(body.payload, request)
 
     try:
         return await _run_pipeline(server, body, publish=publish)
     except KeyError as e:
         raise HTTPException(status_code=400, detail=f"Invalid protocol: {e}")
     except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        _logger.error("Ingest pipeline failed", error=str(e), exc_info=e)
+        raise HTTPException(status_code=422, detail=_safe_error_detail(request, e))
 
 
 @router.post("/test", response_model=IngestResponse)
@@ -188,13 +217,15 @@ async def test_pipeline(request: Request, body: IngestRequest):
     Identical to POST /ingest?publish=false — a convenience endpoint for testing.
     """
     server = _get_server(request)
+    _validate_payload(body.payload, request)
 
     try:
         return await _run_pipeline(server, body, publish=False)
     except KeyError as e:
         raise HTTPException(status_code=400, detail=f"Invalid protocol: {e}")
     except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        _logger.error("Test pipeline failed", error=str(e), exc_info=e)
+        raise HTTPException(status_code=422, detail=_safe_error_detail(request, e))
 
 
 @router.get("/schemas", response_model=list[SchemaListItem])

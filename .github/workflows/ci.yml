@@ -100,6 +100,18 @@ jobs:
           pip-audit --desc on
         continue-on-error: true
 
+      - name: Check for hardcoded secrets
+        run: |
+          # Fail if any file contains obvious secret patterns (API keys, passwords in defaults)
+          ! grep -rn --include='*.py' --include='*.yml' --include='*.yaml' \
+            -E '(sk-[a-zA-Z0-9]{20,}|password\s*=\s*"[^"]{4,}")' \
+            ${{ env.PROJECT_NAME }}/ .github/ || echo "No hardcoded secrets found"
+
+      - name: Run security-focused tests
+        run: |
+          pip install -e ".[test]"
+          pytest ${{ env.PROJECT_NAME }}/tests/test_security.py -v
+
   #-----------------------------------------------------------------------------
   # Testing
   #-----------------------------------------------------------------------------

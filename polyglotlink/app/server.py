@@ -330,10 +330,18 @@ class PolyglotLinkServer:
 
 def create_app():
     """Create FastAPI application for HTTP endpoints."""
-    from fastapi import FastAPI
+    from fastapi import FastAPI, Request
+    from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse
 
     from polyglotlink.api.routes.v1 import router as v1_router
+    from polyglotlink.utils.middleware import (
+        APIKeyMiddleware,
+        RateLimitMiddleware,
+        RequestSizeLimitMiddleware,
+    )
+
+    settings = get_settings()
 
     app = FastAPI(
         title="PolyglotLink",
@@ -341,8 +349,49 @@ def create_app():
         version="0.1.0",
     )
 
+    # Attach settings to app state for middleware access
+    app.state.settings = settings
+
     # Server instance (will be set on startup)
     app.state.server = None
+
+    # --- Security middleware (outermost first) ---
+    app.add_middleware(
+        RequestSizeLimitMiddleware,
+        max_size_bytes=settings.security.max_request_size_bytes,
+    )
+    app.add_middleware(
+        RateLimitMiddleware,
+        max_per_minute=settings.security.rate_limit_per_minute,
+    )
+    app.add_middleware(APIKeyMiddleware)
+
+    # CORS — restrict origins; empty list = no CORS headers added
+    if settings.security.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.security.cors_origins,
+            allow_methods=["GET", "POST"],
+            allow_headers=["*"],
+        )
+
+    # --- Global exception handler (sanitise errors in production) ---
+    @app.exception_handler(Exception)
+    async def _global_exception_handler(request: Request, exc: Exception):
+        logger.error(
+            "Unhandled exception",
+            path=request.url.path,
+            error=str(exc),
+            exc_info=exc,
+        )
+        if settings.is_development:
+            detail = str(exc)
+        else:
+            detail = "Internal server error"
+        return JSONResponse(
+            status_code=500,
+            content={"error": "internal_error", "message": detail},
+        )
 
     # Mount v1 API routes
     app.include_router(v1_router, prefix="/api/v1", tags=["v1"])
@@ -353,6 +402,7 @@ def create_app():
 
     @app.get("/metrics")
     async def metrics():
+        # Metrics are behind API key middleware (non-public path)
         if app.state.server:
             return app.state.server.get_metrics()
         return {"status": "not started"}
@@ -374,9 +424,15 @@ async def run_server(
     port: int = 8080,  # noqa: ARG001
     workers: int = 1,  # noqa: ARG001
     reload: bool = False,  # noqa: ARG001
+    ssl_keyfile: str | None = None,  # noqa: ARG001
+    ssl_certfile: str | None = None,  # noqa: ARG001
     **kwargs,
 ) -> None:
-    """Run the PolyglotLink server."""
+    """Run the PolyglotLink server.
+
+    For production TLS, either pass ssl_keyfile/ssl_certfile or use a
+    reverse proxy (nginx, Traefik) in front of this server.
+    """
     server = PolyglotLinkServer(**kwargs)
 
     # Set up signal handlers
