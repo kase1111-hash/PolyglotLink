@@ -15,12 +15,15 @@ services:
       - "8081:8081"   # WebSocket
     environment:
       - POLYGLOTLINK_ENV=production
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - MQTT_BROKER_HOST=mosquitto
       - MQTT_BROKER_PORT=1883
-      - TIMESCALE_URL=postgresql://postgres:postgres@timescaledb:5432/iot
+      - TIMESCALE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@timescaledb:5432/iot
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - API_KEY_REQUIRED=${API_KEY_REQUIRED:-false}
+      - API_KEY=${API_KEY:-}
+      - SECURITY_RATE_LIMIT_PER_MINUTE=${SECURITY_RATE_LIMIT_PER_MINUTE:-1000}
     depends_on:
       - redis
       - mosquitto
@@ -39,14 +42,14 @@ services:
     container_name: polyglotlink-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme}
     networks:
       - polyglotlink-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -85,7 +88,7 @@ services:
     container_name: polyglotlink-kafka
     restart: unless-stopped
     ports:
-      - "9092:9092"
+      - "127.0.0.1:9092:9092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -93,7 +96,7 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
     volumes:
       - kafka-data:/var/lib/kafka/data
     depends_on:
@@ -103,14 +106,14 @@ services:
 
   # TimescaleDB (Time-series)
   timescaledb:
-    image: timescale/timescaledb:latest-pg15
+    image: timescale/timescaledb:2.14.2-pg15
     container_name: polyglotlink-timescaledb
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       POSTGRES_DB: iot
     volumes:
       - timescale-data:/var/lib/postgresql/data

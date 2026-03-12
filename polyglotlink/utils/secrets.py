@@ -96,7 +96,7 @@ class DotEnvSecretsBackend(SecretsBackend):
             else:
                 self._load_plain()
             self._loaded = True
-            logger.info("Loaded secrets from .env", count=len(self._secrets))
+            logger.debug("Loaded secrets from .env", count=len(self._secrets))
         except Exception as e:
             logger.error("Failed to load .env file", error=str(e))
             raise ConfigurationError(f"Failed to load secrets: {e}")
@@ -221,7 +221,7 @@ class AWSSecretsManagerBackend(SecretsBackend):
                 self._secrets = json.loads(decoded)
 
             self._loaded = True
-            logger.info("Loaded secrets from AWS Secrets Manager", count=len(self._secrets))
+            logger.debug("Loaded secrets from AWS Secrets Manager", count=len(self._secrets))
 
         except Exception as e:
             logger.error("Failed to load from AWS Secrets Manager", error=str(e))

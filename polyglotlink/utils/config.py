@@ -5,6 +5,7 @@ Centralized configuration management with validation using Pydantic Settings.
 Loads configuration from environment variables and .env files.
 """
 
+import warnings
 from functools import lru_cache
 
 from pydantic import Field, field_validator, model_validator
@@ -26,6 +27,7 @@ class LLMSettings(BaseSettings):
     max_tokens: int = Field(default=2000, ge=100, le=8000)
     max_retries: int = Field(default=3, ge=1, le=10)
     timeout_seconds: int = Field(default=30, ge=5, le=120)
+    max_llm_calls_per_minute: int = Field(default=60, ge=1, le=10000)
 
     # Embedding settings
     embedding_model: str = Field(
@@ -34,6 +36,27 @@ class LLMSettings(BaseSettings):
     embedding_threshold: float = Field(
         default=0.85, ge=0.0, le=1.0, validation_alias="EMBEDDING_THRESHOLD"
     )
+
+
+class SecuritySettings(BaseSettings):
+    """API security configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="SECURITY_")
+
+    api_key_required: bool = Field(default=False, validation_alias="API_KEY_REQUIRED")
+    api_key: str | None = Field(default=None, validation_alias="API_KEY")
+    api_key_header: str = Field(default="X-API-Key")
+    rate_limit_per_minute: int = Field(default=1000, ge=1, le=100000)
+    max_request_size_bytes: int = Field(default=1_048_576)  # 1MB
+    max_json_depth: int = Field(default=50, ge=1, le=200)
+    cors_origins: list[str] = Field(default_factory=list)
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            return [o.strip() for o in v.split(",") if o.strip()]
+        return v
 
 
 class MQTTListenerSettings(BaseSettings):
@@ -140,7 +163,7 @@ class TimescaleSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="TIMESCALE_")
 
-    url: str = Field(default="postgresql://postgres:postgres@localhost:5432/iot")
+    url: str = Field(default="")
     pool_min_size: int = Field(default=1, ge=1, le=10)
     pool_max_size: int = Field(default=10, ge=1, le=100)
 
@@ -182,6 +205,7 @@ class Settings(BaseSettings):
 
     # Sub-configurations
     llm: LLMSettings = Field(default_factory=LLMSettings)
+    security: SecuritySettings = Field(default_factory=SecuritySettings)
     mqtt: MQTTListenerSettings = Field(default_factory=MQTTListenerSettings)
     http: HTTPListenerSettings = Field(default_factory=HTTPListenerSettings)
     coap: CoAPListenerSettings = Field(default_factory=CoAPListenerSettings)
@@ -209,6 +233,26 @@ class Settings(BaseSettings):
         if v.lower() not in valid_envs:
             raise ValueError(f"env must be one of {valid_envs}")
         return v.lower()
+
+    @model_validator(mode="after")
+    def warn_insecure_defaults(self):
+        """Emit warnings for insecure defaults in non-development environments."""
+        if self.env in ("production", "staging"):
+            if "postgres:postgres" in self.timescale.url:
+                warnings.warn(
+                    "TimescaleDB is configured with default credentials in "
+                    f"{self.env} environment. Set TIMESCALE_URL with secure credentials.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            if "://" in self.redis.url and "@" not in self.redis.url:
+                warnings.warn(
+                    "Redis is configured without authentication in "
+                    f"{self.env} environment. Add a password to REDIS_URL.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+        return self
 
     @property
     def is_production(self) -> bool:
