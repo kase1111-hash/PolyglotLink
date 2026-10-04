@@ -199,6 +199,29 @@ class TestGetSchemas:
         assert "source" in item
         assert "created_at" in item
 
+    @pytest.mark.asyncio
+    async def test_ingest_learns_schema(self, client):
+        """A schema seen through /ingest is cached and listed once."""
+        for temp in (23.5, 24.0):
+            resp = await client.post(
+                "/api/v1/ingest?publish=false",
+                json={"payload": {"temp_c": temp, "humidity_pct": 45}},
+            )
+            assert resp.status_code == 200
+            signature = resp.json()["schema_signature"]
+
+        schemas = (await client.get("/api/v1/schemas")).json()
+        assert [s["schema_signature"] for s in schemas] == [signature]
+        assert schemas[0]["hits"] == 1
+
+    @pytest.mark.asyncio
+    async def test_dry_run_does_not_learn(self, client):
+        """POST /test has no side effects, so it must not populate the cache."""
+        resp = await client.post("/api/v1/test", json={"payload": {"temp_c": 23.5}})
+        assert resp.status_code == 200
+
+        assert (await client.get("/api/v1/schemas")).json() == []
+
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/schemas/{signature}
@@ -299,3 +322,58 @@ class TestServerNotInitialized:
         async with AsyncClient(transport=transport, base_url="http://test") as c:
             resp = await c.get("/api/v1/schemas")
             assert resp.status_code == 503
+
+
+# ---------------------------------------------------------------------------
+# Serving (polyglotlink serve)
+# ---------------------------------------------------------------------------
+
+
+class TestRunServer:
+    """`polyglotlink serve` must expose this API, not just the device ingress."""
+
+    @pytest.mark.asyncio
+    async def test_serves_api_app_on_requested_address(self, monkeypatch):
+        import uvicorn
+
+        from polyglotlink.app.server import PolyglotLinkServer, run_server
+
+        served = {}
+
+        async def fake_serve(self):
+            served["config"] = self.config
+
+        async def noop(self):
+            pass
+
+        monkeypatch.setattr(uvicorn.Server, "serve", fake_serve)
+        monkeypatch.setattr(PolyglotLinkServer, "start", noop)
+        monkeypatch.setattr(PolyglotLinkServer, "stop", noop)
+
+        await run_server(host="127.0.0.1", port=8080)
+
+        config = served["config"]
+        assert (config.host, config.port) == ("127.0.0.1", 8080)
+        assert isinstance(config.app.state.server, PolyglotLinkServer)
+        assert config.app.state.server.http_app is config.app
+        assert "/api/v1/test" in config.app.openapi()["paths"]
+
+    @pytest.mark.asyncio
+    async def test_http_ingress_attaches_to_shared_app(self):
+        from fastapi import FastAPI
+
+        from polyglotlink.models.schemas import HTTPConfig
+        from polyglotlink.modules.protocol_listener import HTTPHandler
+
+        app = FastAPI()
+        handler = HTTPHandler(HTTPConfig(), app=app)
+        await handler.start()
+
+        assert handler._server is None  # no second server bound to the same port
+        assert "/ingest/{path}" in app.openapi()["paths"]
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            resp = await c.post("/ingest/devices/dev-1/telemetry", json={"temp_c": 21})
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "accepted"

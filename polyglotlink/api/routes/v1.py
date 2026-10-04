@@ -108,8 +108,13 @@ def _safe_error_detail(request: Request, exc: Exception) -> str:
     return "Processing failed"
 
 
-async def _run_pipeline(server, body: IngestRequest, publish: bool) -> IngestResponse:
-    """Run a payload through the full pipeline."""
+async def _run_pipeline(
+    server, body: IngestRequest, publish: bool, learn: bool = True
+) -> IngestResponse:
+    """Run a payload through the full pipeline.
+
+    ``learn`` caches a newly seen schema's mapping for reuse; dry runs turn it off.
+    """
     from polyglotlink.models.schemas import PayloadEncoding, Protocol, RawMessage
     from polyglotlink.modules.protocol_listener import generate_uuid
 
@@ -130,6 +135,10 @@ async def _run_pipeline(server, body: IngestRequest, publish: bool) -> IngestRes
 
     # Step 2: Translate to semantic mapping
     mapping = await server._semantic_translator.translate_schema(schema)
+    if learn:
+        server._schema_extractor.learn_mapping(
+            schema, mapping, server._semantic_translator.config.min_confidence_threshold
+        )
 
     # Step 3: Normalize values
     normalized = server._normalization_engine.normalize_message(schema, mapping)
@@ -220,7 +229,7 @@ async def test_pipeline(request: Request, body: IngestRequest):
     _validate_payload(body.payload, request)
 
     try:
-        return await _run_pipeline(server, body, publish=False)
+        return await _run_pipeline(server, body, publish=False, learn=False)
     except KeyError as e:
         raise HTTPException(status_code=400, detail=f"Invalid protocol: {e}")
     except Exception as e:

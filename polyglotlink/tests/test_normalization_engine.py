@@ -397,3 +397,46 @@ class TestNormalizationEngine:
         assert device is not None
         assert device.type == "environmental"
         assert device.name == "Office Sensor"
+
+
+class TestDuplicateTargets:
+    """Two source fields mapped to the same target must not overwrite each other."""
+
+    def test_second_field_kept_under_duplicate_prefix(self):
+        fields = [
+            ExtractedField(key=key, original_key=key, value=value, value_type="float")
+            for key, value in (("temp_in", 21.0), ("temp_out", 4.5))
+        ]
+        schema = ExtractedSchema(
+            message_id="test-001",
+            device_id="sensor-01",
+            protocol=Protocol.MQTT,
+            topic="sensors/data",
+            fields=fields,
+            schema_signature="dup123",
+            payload_decoded={"temp_in": 21.0, "temp_out": 4.5},
+            extracted_at=datetime.now(timezone.utc),
+        )
+        mapping = SemanticMapping(
+            message_id="test-001",
+            device_id="sensor-01",
+            schema_signature="dup123",
+            field_mappings=[
+                FieldMapping(
+                    source_field=f.key,
+                    target_concept="temperature_celsius",
+                    target_field="temperature_celsius",
+                    source_unit="celsius",
+                    target_unit="celsius",
+                    confidence=0.9,
+                    resolution_method=ResolutionMethod.LLM,
+                )
+                for f in fields
+            ],
+            confidence=0.9,
+            translated_at=datetime.now(timezone.utc),
+        )
+
+        result = NormalizationEngine().normalize_message(schema, mapping)
+
+        assert result.data == {"temperature_celsius": 21.0, "_duplicate.temp_out": 4.5}

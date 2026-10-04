@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Performance benchmarks for core components
 - Load testing with Locust for stress testing
 - Prometheus metrics integration for observability
+- Readings sent as `{"value": ..., "unit": "K"}` use the explicit unit label for conversion
+
+### Fixed
+- Rule-based translation (no OpenAI key) matched aliases by substring, mapping most fields
+  (humidity, voltage, vibration, ...) to `temperature_celsius` and overwriting the real reading
+- `polyglotlink serve` now serves the REST API (`/api/v1/*`, `/docs`) on `--host`/`--port`;
+  the HTTP device ingress shares that server when configured on the same port
+- Schemas are learned: `/api/v1/ingest` and the protocol pipeline cache new mappings, so
+  `/api/v1/schemas` lists them and repeat schemas skip translation (`/api/v1/test` stays side-effect free)
+- Two fields mapped to the same target no longer overwrite each other; the second is kept as `_duplicate.<field>`
+- Docker image runs `serve` instead of exiting after printing help; healthchecks probe `/health`
+  without needing `curl`
+- `scripts/demo.py --url` crashed on conversion records returned by the API
+- CI lint: ruff now targets Python 3.10 (the minimum supported version), so it no longer
+  suggests 3.11-only `datetime.UTC`/`StrEnum`
 
 ## [0.1.0] - 2024-01-15
 

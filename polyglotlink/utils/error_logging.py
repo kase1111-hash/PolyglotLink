@@ -29,7 +29,8 @@ def capture_exception(
     level: str = "error",
 ) -> str | None:
     """Log exception locally."""
-    logger.error(
+    log_func = getattr(logger, level, logger.error)
+    log_func(
         "Exception occurred",
         exc_info=error,
         context=context,
