@@ -19,6 +19,7 @@ from polyglotlink.models.schemas import (
     MappingSource,
     RawMessage,
     SchemaExtractorConfig,
+    SemanticMapping,
 )
 from polyglotlink.modules.protocol_listener import ENCODING_PARSERS
 
@@ -64,6 +65,67 @@ UNIT_PATTERNS: dict[str, str] = {
     r".*(_pct|_percent|%)$": "percent",
     r"^(pct|percent|ratio)$": "percent",
 }
+
+# Explicit unit labels sent alongside a reading, e.g. {"value": 296.65, "unit": "K"}.
+# Keys are lowercased with "°" and spaces removed.
+UNIT_LABELS: dict[str, str] = {
+    # Temperature
+    "c": "celsius",
+    "degc": "celsius",
+    "celsius": "celsius",
+    "f": "fahrenheit",
+    "degf": "fahrenheit",
+    "fahrenheit": "fahrenheit",
+    "k": "kelvin",
+    "kelvin": "kelvin",
+    # Pressure
+    "pa": "pascal",
+    "pascal": "pascal",
+    "hpa": "hectopascal",
+    "mbar": "hectopascal",
+    "bar": "bar",
+    "psi": "psi",
+    # Ratio
+    "%": "percent",
+    "pct": "percent",
+    "percent": "percent",
+    # Electrical
+    "v": "volt",
+    "volt": "volt",
+    "volts": "volt",
+    "a": "ampere",
+    "amp": "ampere",
+    "amps": "ampere",
+    "ampere": "ampere",
+    "w": "watt",
+    "watt": "watt",
+    "watts": "watt",
+    # Speed
+    "m/s": "meters_per_second",
+    "mps": "meters_per_second",
+    "km/h": "kilometers_per_hour",
+    "kmh": "kilometers_per_hour",
+    "kph": "kilometers_per_hour",
+    "mph": "miles_per_hour",
+    # Length
+    "m": "meter",
+    "cm": "centimeter",
+    "mm": "millimeter",
+    # Mass
+    "kg": "kilogram",
+    "g": "gram",
+    # Time
+    "s": "seconds",
+    "sec": "seconds",
+    "ms": "milliseconds",
+    # Other
+    "ppm": "ppm",
+    "dbm": "dbm",
+}
+
+# Leaf key names that carry a unit label, and the sibling leaves it applies to
+UNIT_LABEL_KEYS = frozenset({"unit", "units", "uom"})
+UNIT_VALUE_KEYS = frozenset({"value", "val", "reading"})
 
 
 # ============================================================================
@@ -211,6 +273,35 @@ def is_identifier_field(key: str, value: Any) -> bool:
     return False
 
 
+def apply_unit_labels(fields: list[ExtractedField]) -> None:
+    """
+    Apply explicit unit labels to their sibling readings.
+
+    {"temperature": {"value": 296.65, "unit": "K"}} flattens to
+    "temperature.value" and "temperature.unit". The recognized label becomes
+    the inferred unit of the value field (overriding any key-based guess), and
+    the label field is tagged with the "unit" semantic so it is passed through
+    as metadata instead of being mapped as a measurement itself.
+    """
+    labels: dict[str, str] = {}
+    for field in fields:
+        parent, _, leaf = field.key.rpartition(".")
+        if leaf.lower() not in UNIT_LABEL_KEYS or not isinstance(field.value, str):
+            continue
+        field.inferred_semantic = "unit"
+        unit = UNIT_LABELS.get(field.value.lower().replace("°", "").replace(" ", ""))
+        if unit:
+            labels[parent] = unit
+
+    if not labels:
+        return
+
+    for field in fields:
+        parent, _, leaf = field.key.rpartition(".")
+        if leaf.lower() in UNIT_VALUE_KEYS and parent in labels:
+            field.inferred_unit = labels[parent]
+
+
 # ============================================================================
 # Flattening Utilities
 # ============================================================================
@@ -267,9 +358,12 @@ def generate_schema_hash(fields: list[ExtractedField]) -> str:
     Generate a fingerprint for the schema based on field names and types.
     Used for caching semantic mappings.
     """
-    # Create canonical representation
+    # Create canonical representation. Unit labels include their value, since
+    # {"value": 1, "unit": "K"} and {"value": 1, "unit": "F"} need different mappings.
     canonical = sorted(
-        [f"{f.key}:{f.value_type}" for f in fields if not f.is_timestamp and not f.is_identifier]
+        f"{f.key}:{f.value_type}" + (f"={f.value}" if f.inferred_semantic == "unit" else "")
+        for f in fields
+        if not f.is_timestamp and not f.is_identifier
     )
 
     schema_string = "|".join(canonical)
@@ -344,14 +438,16 @@ class SchemaCache:
             if datetime.now(timezone.utc) - mapping.created_at >= self._ttl:
                 continue
             hits = self._stats.get(sig, {}).get("hits", 0)
-            results.append({
-                "schema_signature": sig,
-                "field_count": len(mapping.field_mappings),
-                "confidence": mapping.confidence,
-                "source": mapping.source.value,
-                "created_at": mapping.created_at.isoformat(),
-                "hits": hits,
-            })
+            results.append(
+                {
+                    "schema_signature": sig,
+                    "field_count": len(mapping.field_mappings),
+                    "confidence": mapping.confidence,
+                    "source": mapping.source.value,
+                    "created_at": mapping.created_at.isoformat(),
+                    "hits": hits,
+                }
+            )
             seen_signatures.add(sig)
 
         # Collect from Redis (keys not already in local cache)
@@ -367,14 +463,16 @@ class SchemaCache:
                                 cached = self._redis.get(key)
                                 if cached:
                                     m = CachedMapping.model_validate_json(cached)
-                                    results.append({
-                                        "schema_signature": sig,
-                                        "field_count": len(m.field_mappings),
-                                        "confidence": m.confidence,
-                                        "source": m.source.value,
-                                        "created_at": m.created_at.isoformat(),
-                                        "hits": 0,
-                                    })
+                                    results.append(
+                                        {
+                                            "schema_signature": sig,
+                                            "field_count": len(m.field_mappings),
+                                            "confidence": m.confidence,
+                                            "source": m.source.value,
+                                            "created_at": m.created_at.isoformat(),
+                                            "hits": 0,
+                                        }
+                                    )
                             except Exception:
                                 pass
                     if cursor == 0:
@@ -457,6 +555,9 @@ class SchemaExtractor:
             )
             fields.append(field)
 
+        if self.config.enable_unit_inference:
+            apply_unit_labels(fields)
+
         # Generate schema fingerprint
         schema_signature = generate_schema_hash(fields)
 
@@ -493,6 +594,24 @@ class SchemaExtractor:
         )
         self.cache.set(schema_signature, cached)
         logger.info("Cached new schema mapping", signature=schema_signature, source=source.value)
+
+    def learn_mapping(
+        self, schema: ExtractedSchema, mapping: SemanticMapping, min_confidence: float = 0.0
+    ) -> bool:
+        """
+        Cache a freshly translated mapping so later messages with the same
+        schema skip translation. Returns True if the mapping was cached.
+        """
+        if schema.cached_mapping is not None or not mapping.field_mappings:
+            return False
+        if mapping.confidence < min_confidence:
+            return False
+
+        source = MappingSource.LLM if mapping.llm_generated else MappingSource.LEARNED
+        self.cache_mapping(
+            schema.schema_signature, mapping.field_mappings, mapping.confidence, source=source
+        )
+        return True
 
     def get_field_summary(self, schema: ExtractedSchema) -> str:
         """Generate a human-readable summary of extracted fields."""

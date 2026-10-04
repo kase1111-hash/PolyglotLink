@@ -8,9 +8,12 @@ from datetime import datetime, timezone
 import pytest
 
 from polyglotlink.models.schemas import (
+    FieldMapping,
     PayloadEncoding,
     Protocol,
     RawMessage,
+    ResolutionMethod,
+    SemanticMapping,
 )
 from polyglotlink.modules.schema_extractor import (
     SchemaCache,
@@ -350,7 +353,6 @@ class TestSchemaCache:
 
     def test_redis_set_calls_setex(self):
         """When Redis client is provided, set() should persist to Redis."""
-        from datetime import timedelta
         from unittest.mock import MagicMock
 
         from polyglotlink.models.schemas import CachedMapping, MappingSource
@@ -600,3 +602,102 @@ class TestSchemaExtractor:
 
         uuid_field = next(f for f in schema.fields if f.key == "uuid")
         assert uuid_field.is_identifier is True
+
+
+def _extract(extractor: SchemaExtractor, payload: dict):
+    raw = RawMessage(
+        message_id="test-001",
+        device_id="sensor-01",
+        protocol=Protocol.MQTT,
+        topic="sensors/data",
+        payload_raw=json.dumps(payload).encode(),
+        payload_encoding=PayloadEncoding.JSON,
+        timestamp=datetime.now(timezone.utc),
+    )
+    return extractor.extract_schema(raw)
+
+
+class TestUnitLabels:
+    """Tests for readings sent as {"value": ..., "unit": ...}."""
+
+    @pytest.fixture
+    def extractor(self):
+        return SchemaExtractor()
+
+    def test_label_applies_to_sibling_value(self, extractor):
+        schema = _extract(extractor, {"readings": {"temperature": {"value": 296.65, "unit": "K"}}})
+        fields = {f.key: f for f in schema.fields}
+
+        assert fields["readings.temperature.value"].inferred_unit == "kelvin"
+        assert fields["readings.temperature.unit"].inferred_semantic == "unit"
+
+    def test_degree_symbol_label(self, extractor):
+        schema = _extract(extractor, {"value": 77, "unit": "°F"})
+        fields = {f.key: f for f in schema.fields}
+
+        assert fields["value"].inferred_unit == "fahrenheit"
+
+    def test_unknown_label_is_not_applied(self, extractor):
+        schema = _extract(extractor, {"value": 5, "unit": "furlongs"})
+        fields = {f.key: f for f in schema.fields}
+
+        assert fields["value"].inferred_unit is None
+        assert fields["unit"].inferred_semantic == "unit"
+
+    def test_label_only_applies_within_its_object(self, extractor):
+        schema = _extract(extractor, {"a": {"value": 1.0, "unit": "K"}, "b": {"value": 2.0}})
+        fields = {f.key: f for f in schema.fields}
+
+        assert fields["a.value"].inferred_unit == "kelvin"
+        assert fields["b.value"].inferred_unit is None
+
+    def test_different_labels_give_different_signatures(self, extractor):
+        kelvin = _extract(extractor, {"temperature": {"value": 1.0, "unit": "K"}})
+        fahrenheit = _extract(extractor, {"temperature": {"value": 1.0, "unit": "F"}})
+
+        assert kelvin.schema_signature != fahrenheit.schema_signature
+
+
+class TestLearnMapping:
+    """Tests for caching freshly translated mappings."""
+
+    @pytest.fixture
+    def extractor(self):
+        return SchemaExtractor(cache=SchemaCache(ttl_days=30))
+
+    def _mapping(self, schema, confidence: float) -> SemanticMapping:
+        return SemanticMapping(
+            message_id=schema.message_id,
+            device_id=schema.device_id,
+            schema_signature=schema.schema_signature,
+            field_mappings=[
+                FieldMapping(
+                    source_field="temp",
+                    target_concept="temperature_celsius",
+                    target_field="temperature_celsius",
+                    confidence=confidence,
+                    resolution_method=ResolutionMethod.LLM,
+                )
+            ],
+            confidence=confidence,
+            translated_at=datetime.now(timezone.utc),
+        )
+
+    def test_new_schema_is_cached_and_reused(self, extractor):
+        schema = _extract(extractor, {"temp": 23.5})
+
+        assert extractor.learn_mapping(schema, self._mapping(schema, 0.9)) is True
+        assert _extract(extractor, {"temp": 25.0}).cached_mapping is not None
+
+    def test_already_cached_schema_is_not_relearned(self, extractor):
+        schema = _extract(extractor, {"temp": 23.5})
+        extractor.learn_mapping(schema, self._mapping(schema, 0.9))
+        repeat = _extract(extractor, {"temp": 25.0})
+
+        assert extractor.learn_mapping(repeat, self._mapping(repeat, 0.9)) is False
+
+    def test_low_confidence_mapping_is_not_cached(self, extractor):
+        schema = _extract(extractor, {"temp": 23.5})
+
+        assert extractor.learn_mapping(schema, self._mapping(schema, 0.3), 0.6) is False
+        assert extractor.cache.get(schema.schema_signature) is None

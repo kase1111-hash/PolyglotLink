@@ -14,7 +14,7 @@ Usage:
 import argparse
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ---------------------------------------------------------------------------
 # The 3 demo device payloads — same physical data, different representations
@@ -47,7 +47,7 @@ DEVICES = [
                 "vibration": {"x": 0.02, "y": 0.01, "z": 0.03},
             },
             "serial": "IND-C-00042",
-            "ts": int(datetime.utcnow().timestamp()),
+            "ts": int(datetime.now(timezone.utc).timestamp()),
         },
     },
 ]
@@ -91,7 +91,7 @@ async def run_in_process(payload: dict, device_id: str = "demo") -> dict:
         topic="demo/ingest",
         payload_raw=payload_bytes,
         payload_encoding=PayloadEncoding.JSON,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
     )
 
     extractor = SchemaExtractor()
@@ -137,7 +137,18 @@ async def run_via_http(url: str, payload: dict) -> dict:
             timeout=30,
         )
         resp.raise_for_status()
-        return resp.json()
+        result = resp.json()
+
+    # Match the in-process result shape used for printing
+    result["conversions"] = [
+        {
+            "field": c["field"],
+            "from": f"{c['original_value']} {c['from_unit']}",
+            "to": f"{c['converted_value']} {c['to_unit']}",
+        }
+        for c in result.get("conversions", [])
+    ]
+    return result
 
 
 # ---------------------------------------------------------------------------

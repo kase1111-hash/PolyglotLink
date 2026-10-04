@@ -29,12 +29,15 @@ class PolyglotLinkServer:
         coap_enabled: bool = True,
         websocket_enabled: bool = True,
         output_enabled: bool = True,
+        http_app: Any = None,
     ):
         self.http_enabled = http_enabled
         self.mqtt_enabled = mqtt_enabled
         self.coap_enabled = coap_enabled
         self.websocket_enabled = websocket_enabled
         self.output_enabled = output_enabled
+        # API app that hosts the HTTP device ingress when both share a port
+        self.http_app = http_app
 
         self._running = False
         self._protocol_listener = None
@@ -145,7 +148,7 @@ class PolyglotLinkServer:
             ),
         )
 
-        self._protocol_listener = ProtocolListener(config)
+        self._protocol_listener = ProtocolListener(config, http_app=self.http_app)
         await self._protocol_listener.start_listeners()
 
     async def _init_schema_extractor(self) -> None:
@@ -281,8 +284,11 @@ class PolyglotLinkServer:
             fields=len(schema.fields),
         )
 
-        # Step 2: Translate to semantic mapping
+        # Step 2: Translate to semantic mapping, learning new schemas for reuse
         mapping = await self._semantic_translator.translate_schema(schema)
+        self._schema_extractor.learn_mapping(
+            schema, mapping, self._semantic_translator.config.min_confidence_threshold
+        )
         logger.debug(
             "Schema translated",
             confidence=mapping.confidence,
@@ -384,10 +390,7 @@ def create_app():
             error=str(exc),
             exc_info=exc,
         )
-        if settings.is_development:
-            detail = str(exc)
-        else:
-            detail = "Internal server error"
+        detail = str(exc) if settings.is_development else "Internal server error"
         return JSONResponse(
             status_code=500,
             content={"error": "internal_error", "message": detail},
@@ -420,37 +423,60 @@ def create_app():
 
 
 async def run_server(
-    host: str = "0.0.0.0",  # noqa: ARG001  # nosec B104 - binding to all interfaces is intentional
-    port: int = 8080,  # noqa: ARG001
-    workers: int = 1,  # noqa: ARG001
-    reload: bool = False,  # noqa: ARG001
-    ssl_keyfile: str | None = None,  # noqa: ARG001
-    ssl_certfile: str | None = None,  # noqa: ARG001
+    host: str = "0.0.0.0",  # nosec B104 - binding to all interfaces is intentional
+    port: int = 8080,
+    workers: int = 1,
+    reload: bool = False,
+    ssl_keyfile: str | None = None,
+    ssl_certfile: str | None = None,
     **kwargs,
 ) -> None:
-    """Run the PolyglotLink server.
+    """Run the PolyglotLink server and serve the REST API on host:port.
 
     For production TLS, either pass ssl_keyfile/ssl_certfile or use a
     reverse proxy (nginx, Traefik) in front of this server.
     """
-    server = PolyglotLinkServer(**kwargs)
+    import uvicorn
 
-    # Set up signal handlers
+    if workers != 1 or reload:
+        logger.warning(
+            "--workers and --reload are not supported; running a single process",
+            workers=workers,
+            reload=reload,
+        )
+
+    app = create_app()
+
+    # The HTTP device ingress shares the API server when configured on the same port
+    shared_port = get_settings().http.port == port
+    server = PolyglotLinkServer(http_app=app if shared_port else None, **kwargs)
+    app.state.server = server
+
+    api_server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            host=host,
+            port=port,
+            ssl_keyfile=ssl_keyfile,
+            ssl_certfile=ssl_certfile,
+            log_level="warning",
+        )
+    )
+
+    # uvicorn handles SIGINT/SIGTERM while serving and re-raises them afterwards;
+    # these handlers make that re-raise a no-op so shutdown runs in the finally block
     loop = asyncio.get_running_loop()
 
     def signal_handler():
         logger.info("Received shutdown signal")
-        asyncio.create_task(server.stop())
+        api_server.should_exit = True
 
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, signal_handler)
 
     try:
         await server.start()
-
-        # Keep running until stopped
-        while server._running:
-            await asyncio.sleep(1)
-
+        logger.info("REST API listening", host=host, port=port)
+        await api_server.serve()
     finally:
         await server.stop()

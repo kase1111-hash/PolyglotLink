@@ -15,7 +15,6 @@ Ports (offset to avoid collisions with dev services):
     Mosquitto: localhost:1893
 """
 
-import asyncio
 import json
 import os
 import time

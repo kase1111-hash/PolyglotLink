@@ -640,3 +640,63 @@ class TestRegressionSuite:
 
         schema = extractor.extract_schema(raw)
         assert len(schema.fields) == 3
+
+
+class TestRuleBasedTranslation:
+    """End-to-end values when no LLM is configured (the default and demo path)."""
+
+    async def _normalize(self, payload: dict) -> NormalizedMessage:
+        raw = RawMessage(
+            message_id="test-001",
+            device_id="device-001",
+            protocol=Protocol.HTTP,
+            topic="test",
+            payload_raw=json.dumps(payload).encode(),
+            payload_encoding=PayloadEncoding.JSON,
+            timestamp=datetime.now(timezone.utc),
+        )
+        schema = SchemaExtractor().extract_schema(raw)
+        mapping = await SemanticTranslator().translate_schema(schema)
+        return NormalizationEngine().normalize_message(schema, mapping)
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"temp_c": 23.5, "humidity_pct": 45, "bat_v": 3.2, "device_id": "sensor-A"},
+            {"temperature_f": 74.3, "rh": 45, "pressure_hpa": 1013.25, "station_id": "wx-B"},
+            {
+                "readings": {
+                    "temperature": {"value": 296.65, "unit": "K"},
+                    "vibration": {"x": 0.02, "y": 0.01, "z": 0.03},
+                },
+                "serial": "IND-C-00042",
+            },
+        ],
+        ids=["celsius-flat", "fahrenheit", "kelvin-nested"],
+    )
+    async def test_demo_devices_normalize_to_same_temperature(self, payload):
+        """Regression: every demo device must report the same 23.5 °C reading."""
+        normalized = await self._normalize(payload)
+        assert normalized.data["temperature_celsius"] == pytest.approx(23.5, abs=0.01)
+
+    async def test_fields_map_to_their_own_concepts(self):
+        """Regression: substring alias matching sent humidity and voltage to temperature."""
+        normalized = await self._normalize({"temp_c": 23.5, "humidity_pct": 45, "bat_v": 3.2})
+        assert normalized.data == {
+            "temperature_celsius": 23.5,
+            "humidity_percent": 45.0,
+            "voltage_volt": 3.2,
+        }
+
+    async def test_unrecognized_fields_are_not_mapped_to_temperature(self):
+        """Fields that merely contain the letter 't' must not match the 't' alias."""
+        normalized = await self._normalize({"t": 21.0, "count": 5, "vibration": {"x": 0.02}})
+        assert normalized.data["temperature_celsius"] == 21.0
+        assert normalized.data["_unmapped.count"] == 5
+        assert normalized.data["_unmapped.vibration.x"] == 0.02
+
+    async def test_unit_label_converts_value(self):
+        normalized = await self._normalize({"temperature": {"value": 77, "unit": "°F"}})
+        assert normalized.data["temperature_celsius"] == 25.0
+        assert normalized.data["temperature.unit"] == "°F"
+        assert not normalized.validation_errors

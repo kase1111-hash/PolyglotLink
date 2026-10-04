@@ -51,10 +51,10 @@ USER appuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import polyglotlink; print('healthy')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5)" || exit 1
 
 # Default command
-CMD ["python", "-m", "polyglotlink.app.main"]
+CMD ["python", "-m", "polyglotlink.app.main", "serve"]
 
 # Expose ports
 EXPOSE 8080 5683 8081

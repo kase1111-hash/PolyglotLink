@@ -9,6 +9,7 @@ import json
 import re
 import time
 from datetime import datetime, timezone
+from itertools import pairwise
 
 import structlog
 
@@ -182,6 +183,31 @@ DEFAULT_ONTOLOGY_CONCEPTS = [
 # Pre-compute the set of known concept IDs for LLM output validation
 _KNOWN_CONCEPT_IDS = frozenset(c["concept_id"] for c in DEFAULT_ONTOLOGY_CONCEPTS)
 
+# Alias -> concept lookup for the rule-based fallback
+_ALIAS_TO_CONCEPT = {
+    alias: concept for concept in DEFAULT_ONTOLOGY_CONCEPTS for alias in concept.get("aliases", [])
+}
+
+
+def _match_alias(text: str) -> dict | None:
+    """Find the ontology concept whose alias matches a whole token of ``text``.
+
+    Matching is on whole tokens (split on ``.``, ``_``, ``-`` and whitespace),
+    never substrings, so short aliases like ``"t"`` or ``"v"`` only match a
+    field actually named ``t`` or ``v`` rather than any key containing that
+    letter. The full text and adjacent token pairs are tried first so that
+    multi-word aliases such as ``"bat_level"`` win over their parts.
+    """
+    tokens = [t for t in re.split(r"[\s._\-]+", text.lower()) if t]
+    candidates = ["_".join(tokens)]
+    candidates += [f"{a}_{b}" for a, b in pairwise(tokens)]
+    candidates += tokens
+    for candidate in candidates:
+        concept = _ALIAS_TO_CONCEPT.get(candidate)
+        if concept:
+            return concept
+    return None
+
 
 def _sanitize_prompt_text(text: str, max_length: int = 60) -> str:
     """Sanitize text before embedding in LLM prompts.
@@ -190,10 +216,7 @@ def _sanitize_prompt_text(text: str, max_length: int = 60) -> str:
     that could break Markdown tables or be used for prompt injection.
     """
     # Remove control characters and non-printable Unicode
-    sanitized = "".join(
-        c for c in text
-        if c == " " or (c.isprintable() and c not in "|`{}")
-    )
+    sanitized = "".join(c for c in text if c == " " or (c.isprintable() and c not in "|`{}"))
     # Collapse whitespace
     sanitized = " ".join(sanitized.split())
     # Truncate
@@ -217,9 +240,7 @@ def build_fields_table(fields: list[ExtractedField]) -> str:
         safe_hint = _sanitize_prompt_text(field.inferred_semantic or "-", max_length=30)
 
         rows.append(
-            f"| {safe_key} | {safe_value} | "
-            f"{field.value_type} | {safe_unit} | "
-            f"{safe_hint} |"
+            f"| {safe_key} | {safe_value} | {field.value_type} | {safe_unit} | {safe_hint} |"
         )
 
     return "\n".join(rows)
@@ -515,10 +536,7 @@ class LLMTranslator:
                 target_concept = m["target_concept"]
 
                 # Validate target_concept against known ontology
-                if (
-                    target_concept not in valid_concepts
-                    and not target_concept.startswith("_")
-                ):
+                if target_concept not in valid_concepts and not target_concept.startswith("_"):
                     logger.warning(
                         "LLM returned unknown concept, skipping",
                         target_concept=target_concept,
@@ -643,42 +661,28 @@ class LLMTranslator:
                 {"mappings": [], "device_context": "unknown", "suggested_new_concepts": []}
             )
 
-        # Build a lookup from semantic hint to ontology concept
-        hint_to_concept: dict[str, dict] = {}
-        for concept in DEFAULT_ONTOLOGY_CONCEPTS:
-            for alias in concept.get("aliases", []):
-                hint_to_concept[alias] = concept
-
         mappings = []
         for field in fields:
+            # Prefer the extractor's semantic hint, then fall back to the field key
             matched_concept = None
-
-            # Try matching via semantic hint
             if field.inferred_semantic:
-                for alias, concept in hint_to_concept.items():
-                    if alias in field.inferred_semantic.lower() or field.inferred_semantic.lower() in alias:
-                        matched_concept = concept
-                        break
-
-            # Try matching via field key directly
+                matched_concept = _match_alias(field.inferred_semantic)
             if not matched_concept:
-                key_lower = field.key.lower().replace(".", "_")
-                for alias, concept in hint_to_concept.items():
-                    if alias in key_lower:
-                        matched_concept = concept
-                        break
+                matched_concept = _match_alias(field.key)
 
             if matched_concept:
-                mappings.append({
-                    "source_field": field.key,
-                    "target_concept": matched_concept["concept_id"],
-                    "target_field": matched_concept["concept_id"],
-                    "source_unit": field.inferred_unit,
-                    "target_unit": matched_concept["unit"],
-                    "conversion_formula": None,
-                    "confidence": 0.7,
-                    "reasoning": "rule-based fallback (no LLM available)",
-                })
+                mappings.append(
+                    {
+                        "source_field": field.key,
+                        "target_concept": matched_concept["concept_id"],
+                        "target_field": matched_concept["concept_id"],
+                        "source_unit": field.inferred_unit,
+                        "target_unit": matched_concept["unit"],
+                        "conversion_formula": None,
+                        "confidence": 0.7,
+                        "reasoning": "rule-based fallback (no LLM available)",
+                    }
+                )
 
         return json.dumps(
             {"mappings": mappings, "device_context": "unknown", "suggested_new_concepts": []}
@@ -731,8 +735,8 @@ class SemanticTranslator:
 
         # Try embedding resolution for each field
         for field in schema.fields:
-            # Skip timestamps and identifiers
-            if field.is_timestamp or field.is_identifier:
+            # Skip timestamps, identifiers and unit labels (already applied to their value)
+            if field.is_timestamp or field.is_identifier or field.inferred_semantic == "unit":
                 mappings.append(self._create_passthrough_mapping(field))
                 continue
 

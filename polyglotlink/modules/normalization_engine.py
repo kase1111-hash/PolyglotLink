@@ -136,7 +136,7 @@ class SafeExpressionEvaluator:
     def evaluate(self, expression: str) -> float:
         """Safely evaluate an arithmetic expression."""
         try:
-            tree = ast.parse(expression, mode='eval')
+            tree = ast.parse(expression, mode="eval")
             return self._eval_node(tree.body)
         except (SyntaxError, TypeError, KeyError) as e:
             raise ConversionError(f"Invalid expression: {e}")
@@ -535,6 +535,16 @@ class NormalizationEngine:
             # Apply precision
             if isinstance(value, float):
                 value = self._apply_precision(value, target_field)
+
+            if target_field in normalized_fields:
+                # Keep both readings instead of silently overwriting the first,
+                # e.g. temp_in and temp_out both mapped to temperature_celsius
+                logger.warning(
+                    "Multiple fields mapped to the same target",
+                    target_field=target_field,
+                    source_field=field.key,
+                )
+                target_field = f"_duplicate.{field.key}"
 
             normalized_fields[target_field] = value
 

@@ -548,7 +548,9 @@ class OutputBroker:
         """Publish to Kafka topic."""
         try:
             future = self._kafka_producer.send(
-                topic, value=payload, timestamp_ms=int(datetime.now(timezone.utc).timestamp() * 1000)
+                topic,
+                value=payload,
+                timestamp_ms=int(datetime.now(timezone.utc).timestamp() * 1000),
             )
             # Wait for send to complete
             loop = asyncio.get_running_loop()

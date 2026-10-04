@@ -415,9 +415,12 @@ class MQTTHandler(BaseProtocolHandler):
 class HTTPHandler(BaseProtocolHandler):
     """HTTP webhook handler using FastAPI."""
 
-    def __init__(self, config: HTTPConfig):
+    def __init__(self, config: HTTPConfig, app: Any = None):
         super().__init__(Protocol.HTTP)
         self.config = config
+        # When given an app (the main API server), ingress routes are added to it
+        # instead of starting a second server on the same port
+        self._shared_app = app
         self._app = None
         self._server = None
 
@@ -427,7 +430,7 @@ class HTTPHandler(BaseProtocolHandler):
             import uvicorn
             from fastapi import FastAPI, Request
 
-            self._app = FastAPI(title="PolyglotLink HTTP Ingress")
+            self._app = self._shared_app or FastAPI(title="PolyglotLink HTTP Ingress")
 
             @self._app.post(f"{self.config.path_prefix}/{{path:path}}")
             async def ingest(request: Request, path: str = ""):
@@ -453,11 +456,17 @@ class HTTPHandler(BaseProtocolHandler):
                 await self.emit_message(raw)
                 return {"status": "accepted", "message_id": raw.message_id}
 
+            self._running = True
+
+            if self._shared_app is not None:
+                logger.info(
+                    "HTTP handler attached to API server", path_prefix=self.config.path_prefix
+                )
+                return
+
             @self._app.get("/health")
             async def health():
                 return {"status": "healthy"}
-
-            self._running = True
 
             config = uvicorn.Config(
                 self._app, host=self.config.host, port=self.config.port, log_level="warning"
@@ -724,7 +733,8 @@ class OPCUAHandler(BaseProtocolHandler):
                         topic=str(node),
                         payload_raw=payload,
                         payload_encoding=PayloadEncoding.JSON,
-                        timestamp=data.monitored_item.Value.SourceTimestamp or datetime.now(timezone.utc),
+                        timestamp=data.monitored_item.Value.SourceTimestamp
+                        or datetime.now(timezone.utc),
                         metadata={
                             "node_id": str(node),
                             "status_code": str(data.monitored_item.Value.StatusCode),
@@ -815,8 +825,9 @@ class ProtocolListener:
     Manages all protocol handlers and provides unified message stream.
     """
 
-    def __init__(self, config: ProtocolListenerConfig):
+    def __init__(self, config: ProtocolListenerConfig, http_app: Any = None):
         self.config = config
+        self._http_app = http_app
         self._handlers: list[BaseProtocolHandler] = []
         self._running = False
 
@@ -828,7 +839,7 @@ class ProtocolListener:
             self._handlers.append(handler)
 
         if self.config.http.enabled:
-            handler = HTTPHandler(self.config.http)
+            handler = HTTPHandler(self.config.http, app=self._http_app)
             await handler.start()
             self._handlers.append(handler)
 
